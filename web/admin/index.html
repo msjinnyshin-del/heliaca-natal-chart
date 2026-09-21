@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#020606">
+  <title>Heliaca 관리자</title>
+  <link rel="icon" href="/assets/heliaca-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand-block" href="/admin/" aria-label="관리자 처음으로"><img class="brand-logo" src="/assets/heliaca-logo.svg" alt="Heliaca"></a>
+    <div class="adm-head-tools">
+      <span class="plate-number">ADMIN CONSOLE</span>
+      <form method="post" action="/admin/logout"><button class="text-button" type="submit">로그아웃</button></form>
+    </div>
+  </header>
+
+  <main class="adm-main">
+    <section class="adm-range" aria-label="조회 기간">
+      <label class="field"><span>시작일 (UTC)</span><input id="range-from" type="date"></label>
+      <label class="field"><span>종료일 (UTC)</span><input id="range-to" type="date"></label>
+      <button id="range-apply" class="copy-button" type="button">적용</button>
+      <p class="adm-note">출생 원문은 관리자만 열람합니다. 삭제 요청 시 사용자 탭 또는 입력 기록에서 삭제하세요.</p>
+    </section>
+
+    <div id="adm-message" class="adm-message" role="status" aria-live="polite"></div>
+
+    <div class="tab-list adm-tabs" role="tablist" aria-label="관리자 메뉴" id="adm-tabs"></div>
+
+    <section id="panel-stats" class="adm-panel" role="tabpanel" aria-labelledby="tab-stats">
+      <div id="kpi-grid" class="adm-kpis"></div>
+      <figure class="adm-card">
+        <figcaption class="plate-number">DAILY SUBMISSIONS</figcaption>
+        <div id="daily-chart" class="adm-daily"></div>
+      </figure>
+      <div id="distribution-grid" class="adm-dist-grid"></div>
+      <section class="adm-card" aria-labelledby="utm-stats-title">
+        <h3 id="utm-stats-title" class="plate-number">UTM · 단축 링크 성과</h3>
+        <p class="adm-note">클릭 = 사람 클릭(미리보기 봇·HEAD 제외). 전환율 = 단축 링크로 귀속된 입력 ÷ 클릭. 단축코드 없이 utm만 붙은 입력은 “UTM 직접 유입”으로 따로 셉니다.</p>
+        <div id="utm-kpis" class="adm-kpis"></div>
+        <div id="utm-daily" class="adm-daily"></div>
+        <div id="utm-stat-tables" class="adm-stack"></div>
+      </section>
+    </section>
+
+    <section id="panel-utm" class="adm-panel" role="tabpanel" aria-labelledby="tab-utm" hidden>
+      <form id="utm-form" class="adm-card adm-form" novalidate>
+        <h3 class="plate-number">새 링크 만들기</h3>
+        <div class="adm-form-grid">
+          <label class="field"><span>목적지</span><select id="utm-target-preset"><option value="/">홈 ( / )</option><option value="custom">직접 입력 (경로)</option></select></label>
+          <label class="field" id="utm-target-custom-field" hidden><span>경로 (/로 시작)</span><input id="utm-target-custom" type="text" maxlength="200" placeholder="/"></label>
+          <label class="field"><span>캠페인</span><select id="utm-campaign" required></select></label>
+          <label class="field"><span>utm_content (선택)</span><input id="utm-content" type="text" maxlength="64" placeholder="reel-0922"></label>
+          <label class="field"><span>메모 (선택)</span><input id="utm-memo" type="text" maxlength="200"></label>
+          <label class="field"><span>만든 사람 (선택)</span><input id="utm-created-by" type="text" maxlength="40"></label>
+        </div>
+        <fieldset class="adm-checks"><legend>채널 (여러 개 선택 가능)</legend><div id="utm-channel-list" class="adm-check-list"></div></fieldset>
+        <details class="adm-advanced"><summary>고급: source / medium 직접 지정 (채널 1개일 때만)</summary>
+          <div class="adm-form-grid">
+            <label class="field"><span>utm_source</span><input id="utm-source-override" type="text" maxlength="64"></label>
+            <label class="field"><span>utm_medium</span><input id="utm-medium-override" type="text" maxlength="64"></label>
+          </div>
+        </details>
+        <p class="adm-note">값은 영문 소문자·숫자·-·_ 만 허용합니다. 같은 조합의 활성 링크가 있으면 새로 만들지 않고 기존 코드를 돌려줍니다.</p>
+        <button class="copy-button" type="submit">링크 생성</button>
+      </form>
+      <div id="utm-result" class="adm-stack" aria-live="polite"></div>
+    </section>
+
+    <section id="panel-links" class="adm-panel" role="tabpanel" aria-labelledby="tab-links" hidden>
+      <div class="adm-toolbar">
+        <label class="field"><span>검색 (코드·메모·content·경로)</span><input id="links-q" type="search" maxlength="80"></label>
+        <label class="field"><span>채널</span><select id="links-channel"></select></label>
+        <label class="field"><span>캠페인</span><select id="links-campaign"></select></label>
+        <label class="field"><span>상태</span><select id="links-archived"><option value="">활성</option><option value="only">보관됨</option><option value="all">전체</option></select></label>
+        <button id="links-search" class="text-button" type="button">검색</button>
+      </div>
+      <p class="adm-note">누적 수치(기간 필터 없음). 클릭은 사람 클릭만, 봇은 미리보기 봇·HEAD 요청입니다.</p>
+      <div class="table-scroll"><table class="adm-table"><thead><tr>
+        <th scope="col">코드</th><th scope="col">채널</th><th scope="col">캠페인</th><th scope="col">content</th><th scope="col">목적지</th>
+        <th scope="col">클릭</th><th scope="col">봇</th><th scope="col">입력</th><th scope="col">성공</th><th scope="col">전환율</th>
+        <th scope="col">메모</th><th scope="col">생성</th><th scope="col">작업</th>
+      </tr></thead><tbody id="links-body"></tbody></table></div>
+    </section>
+
+    <section id="panel-channels" class="adm-panel" role="tabpanel" aria-labelledby="tab-channels" hidden>
+      <form id="channel-form" class="adm-card adm-form" novalidate>
+        <h3 class="plate-number" id="channel-form-title">채널 추가</h3>
+        <div class="adm-form-grid">
+          <label class="field"><span>key</span><input id="channel-key" type="text" maxlength="64" required></label>
+          <label class="field"><span>이름</span><input id="channel-label" type="text" maxlength="40" required></label>
+          <label class="field"><span>utm_source</span><input id="channel-source" type="text" maxlength="64" required></label>
+          <label class="field"><span>utm_medium</span><input id="channel-medium" type="text" maxlength="64" required></label>
+          <label class="field"><span>정렬 순서</span><input id="channel-order" type="number" step="1" value="100"></label>
+          <label class="field"><span>메모</span><input id="channel-note" type="text" maxlength="200"></label>
+        </div>
+        <div class="adm-actions"><button class="copy-button" type="submit">저장</button><button id="channel-cancel" class="text-button" type="button" hidden>편집 취소</button></div>
+      </form>
+      <div class="table-scroll"><table class="adm-table"><thead><tr>
+        <th scope="col">key</th><th scope="col">이름</th><th scope="col">source</th><th scope="col">medium</th><th scope="col">순서</th><th scope="col">메모</th><th scope="col">상태</th><th scope="col">작업</th>
+      </tr></thead><tbody id="channels-body"></tbody></table></div>
+
+      <form id="campaign-form" class="adm-card adm-form" novalidate>
+        <h3 class="plate-number" id="campaign-form-title">캠페인 추가</h3>
+        <div class="adm-form-grid">
+          <label class="field"><span>key (= utm_campaign)</span><input id="campaign-key" type="text" maxlength="64" required></label>
+          <label class="field"><span>이름</span><input id="campaign-label" type="text" maxlength="60" required></label>
+          <label class="field"><span>시작일</span><input id="campaign-starts" type="date"></label>
+          <label class="field"><span>종료일</span><input id="campaign-ends" type="date"></label>
+          <label class="field"><span>메모</span><input id="campaign-note" type="text" maxlength="200"></label>
+        </div>
+        <div class="adm-actions"><button class="copy-button" type="submit">저장</button><button id="campaign-cancel" class="text-button" type="button" hidden>편집 취소</button></div>
+      </form>
+      <div class="table-scroll"><table class="adm-table"><thead><tr>
+        <th scope="col">key</th><th scope="col">이름</th><th scope="col">기간</th><th scope="col">메모</th><th scope="col">상태</th><th scope="col">작업</th>
+      </tr></thead><tbody id="campaigns-body"></tbody></table></div>
+    </section>
+
+    <section id="panel-users" class="adm-panel" role="tabpanel" aria-labelledby="tab-users" hidden>
+      <div class="adm-toolbar">
+        <label class="field"><span>이름 · visitor 검색</span><input id="users-q" type="search" maxlength="80"></label>
+        <button id="users-search" class="text-button" type="button">검색</button>
+        <p id="users-anon" class="adm-note"></p>
+      </div>
+      <div class="table-scroll"><table class="adm-table"><thead><tr>
+        <th scope="col">최근 이름</th><th scope="col">사용한 이름</th><th scope="col">횟수</th><th scope="col">성공</th>
+        <th scope="col">처음</th><th scope="col">마지막</th><th scope="col">visitor</th><th scope="col">작업</th>
+      </tr></thead><tbody id="users-body"></tbody></table></div>
+    </section>
+
+    <section id="panel-submissions" class="adm-panel" role="tabpanel" aria-labelledby="tab-submissions" hidden>
+      <div class="adm-toolbar">
+        <label class="field"><span>이름 · 출생지 검색</span><input id="subs-q" type="search" maxlength="80"></label>
+        <label class="field"><span>상태</span><select id="subs-status"><option value="">전체</option><option value="success">성공</option><option value="failed">실패</option></select></label>
+        <button id="subs-search" class="text-button" type="button">검색</button>
+        <span id="subs-visitor" class="status-badge" hidden></span>
+        <button id="subs-visitor-clear" class="text-button" type="button" hidden>visitor 필터 해제</button>
+      </div>
+      <div class="table-scroll"><table class="adm-table"><thead><tr>
+        <th scope="col">#</th><th scope="col">시각 (UTC)</th><th scope="col">이름</th><th scope="col">출생지</th>
+        <th scope="col">상태</th><th scope="col">☉ ☽ ASC</th><th scope="col">UTM</th>
+      </tr></thead><tbody id="subs-body"></tbody></table></div>
+      <div class="adm-pager"><button id="subs-prev" class="text-button" type="button">이전</button><span id="subs-page"></span><button id="subs-next" class="text-button" type="button">다음</button></div>
+    </section>
+  </main>
+
+  <dialog id="detail" class="adm-drawer" aria-labelledby="detail-title">
+    <div class="adm-drawer-head">
+      <div><p class="plate-number">SUBMISSION</p><h2 id="detail-title">입력 기록</h2></div>
+      <div class="adm-drawer-actions">
+        <button id="detail-delete" class="text-button adm-danger" type="button">이 기록 삭제</button>
+        <button id="detail-close" class="text-button" type="button">닫기</button>
+      </div>
+    </div>
+    <dl id="detail-meta" class="metadata-list"></dl>
+    <h3 class="plate-number">RAW INPUT</h3>
+    <pre id="detail-raw" class="adm-raw"></pre>
+    <h3 class="plate-number">CHART (저장된 원문으로 재계산)</h3>
+    <p id="detail-chart-status" class="adm-note"></p>
+    <div class="adm-chart-grid">
+      <div id="detail-wheel" class="chart-stage"></div>
+      <div>
+        <div class="table-scroll"><table><thead><tr><th scope="col">대상</th><th scope="col">위치</th><th scope="col">H</th><th scope="col">운동</th></tr></thead><tbody id="detail-positions"></tbody></table></div>
+        <dl id="detail-angles" class="angle-list"></dl>
+      </div>
+    </div>
+    <div id="detail-aspects"></div>
+  </dialog>
+
+  <script type="module" src="/admin/admin.js"></script>
+</body>
+</html>

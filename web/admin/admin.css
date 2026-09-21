@@ -1,0 +1,98 @@
+/* Heliaca admin console. Builds on /styles.css tokens; no inline styles (strict CSP). */
+.adm-main { padding-top: 1.5rem; }
+.adm-head-tools { display: flex; align-items: center; gap: 1rem; }
+.adm-head-tools form { margin: 0; }
+.adm-head-tools .text-button { margin-top: 0; }
+
+.adm-range, .adm-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem; margin-bottom: 1rem; }
+.adm-range .field, .adm-toolbar .field { min-width: 11rem; padding: .6rem .75rem; border: 1px solid var(--rule); }
+.adm-range .copy-button, .adm-toolbar .text-button { margin-top: 0; }
+.adm-note { margin: 0; color: var(--ink-faint); font-size: .74rem; }
+.adm-message { min-height: 1.6rem; color: var(--ink-soft); font-size: .8rem; }
+.adm-message.is-error { color: var(--coral); }
+.adm-message.is-info { color: var(--teal); }
+
+.adm-tabs { margin-bottom: 1.2rem; }
+.adm-panel { display: grid; gap: 1.2rem; }
+.adm-panel[hidden] { display: none; }
+
+.adm-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; border: 1px solid var(--rule); background: var(--rule); }
+.adm-kpi { padding: 1rem 1.1rem; background: var(--night-raised); }
+.adm-kpi small { display: block; color: var(--teal); font: 650 .6rem var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.adm-kpi strong { display: block; margin-top: .3rem; font: 500 2rem var(--serif); font-variant-numeric: tabular-nums; }
+
+.adm-card { margin: 0; padding: 1rem 1.1rem; border: 1px solid var(--rule); background: var(--night-raised); }
+.adm-card h3 { margin: 0 0 .7rem; }
+.adm-daily-svg { display: block; width: 100%; height: auto; }
+.adm-bar-ok { fill: var(--teal); }
+.adm-bar-fail { fill: var(--coral); }
+.adm-axis-label { fill: var(--ink-faint); font: 10px var(--mono); }
+.adm-center { text-anchor: middle; }
+
+.adm-dist-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+.adm-dist { margin: 0; padding: 0; list-style: none; display: grid; gap: .4rem; }
+.adm-dist li { display: grid; grid-template-columns: minmax(0, 8rem) 1fr 2.5rem; align-items: center; gap: .6rem; font-size: .8rem; }
+.adm-dist-key { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-dist-track { height: .45rem; background: var(--night-soft); }
+.adm-dist-fill { display: block; height: 100%; background: var(--teal); }
+.adm-dist-count { color: var(--ink-soft); font: .74rem var(--mono); text-align: right; }
+
+.adm-table td { font-family: var(--sans); font-size: .8rem; }
+.adm-mono { font-family: var(--mono) !important; font-size: .72rem !important; }
+.adm-fail { color: var(--coral); }
+.adm-actions { display: flex; gap: .4rem; }
+.adm-actions .text-button { margin-top: 0; padding: .3rem .6rem; }
+.adm-clickable { cursor: pointer; }
+.adm-clickable:hover td, .adm-clickable:focus td { background: var(--night-soft); }
+.adm-clickable:focus { outline: 1px solid var(--teal); }
+.adm-danger { border-color: rgba(229, 153, 143, .5) !important; color: var(--coral) !important; }
+.adm-pager { display: flex; align-items: center; gap: 1rem; color: var(--ink-soft); font: .74rem var(--mono); }
+.adm-pager .text-button { margin-top: 0; }
+
+.adm-drawer { width: min(1100px, 100vw); max-width: 100vw; height: 100vh; max-height: 100vh; margin: 0 0 0 auto; padding: 1.4rem; border: 0; border-left: 1px solid var(--rule-strong); color: var(--ink); background: var(--night); }
+.adm-drawer::backdrop { background: rgba(2, 6, 6, .72); }
+.adm-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.adm-drawer-head h2 { margin: .2rem 0 0; font: 500 1.6rem var(--serif); }
+.adm-drawer-actions { display: flex; gap: .5rem; }
+.adm-drawer-actions .text-button { margin-top: 0; }
+.adm-drawer h3 { margin: 1.4rem 0 .5rem; }
+.adm-raw { max-height: 18rem; overflow: auto; margin: 0; padding: .9rem; border: 1px solid var(--rule); background: var(--void); color: var(--ink-soft); font: .74rem/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.adm-chart-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+.adm-chart-grid .chart-stage { min-height: 0; }
+#detail-aspects { margin-top: 1rem; }
+
+.adm-stack { display: grid; gap: 1rem; }
+.adm-form { display: grid; gap: .9rem; }
+.adm-form h3 { margin: 0; }
+.adm-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .6rem; }
+.adm-form-grid .field, .adm-checks { border: 1px solid var(--rule); }
+.adm-form .copy-button, .adm-form .text-button { margin-top: 0; }
+.adm-form .field[hidden] { display: none; }
+.adm-checks { margin: 0; padding: .7rem .9rem; }
+.adm-checks legend { padding: 0 .3rem; color: var(--ink-soft); font: 650 .62rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.adm-check-list { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; }
+.adm-check-list label { display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; }
+.adm-advanced summary { cursor: pointer; color: var(--ink-soft); font-size: .8rem; }
+.adm-advanced[open] summary { margin-bottom: .6rem; }
+.adm-url-row { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) auto; align-items: center; gap: .6rem; }
+.adm-url-row small { color: var(--teal); font: 650 .6rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.adm-url-row output { overflow-wrap: anywhere; font: .78rem var(--mono); }
+.adm-url-row .text-button { margin-top: 0; padding: .3rem .6rem; }
+.adm-badge { margin-left: .5rem; color: var(--ink-faint); font: .68rem var(--mono); }
+.adm-muted td { color: var(--ink-faint); }
+.adm-bar-click { fill: var(--teal); }
+.adm-bar-sub { fill: var(--coral); }
+
+.adm-login-body { display: grid; min-height: 100vh; place-items: center; }
+.adm-login { width: min(420px, calc(100% - 32px)); display: grid; gap: .9rem; padding: 2rem; border: 1px solid var(--rule); background: var(--night-raised); }
+.adm-login h1 { margin: 0; font: 500 1.8rem var(--serif); }
+.adm-login form { display: grid; gap: .8rem; }
+.adm-login .field { border: 1px solid var(--rule); }
+.adm-login .copy-button { margin-top: 0; }
+
+@media (max-width: 760px) {
+  .adm-chart-grid { grid-template-columns: 1fr; }
+  .adm-drawer { padding: 1rem; }
+  .adm-dist li { grid-template-columns: minmax(0, 6rem) 1fr 2.2rem; }
+  .adm-url-row { grid-template-columns: 1fr; }
+}

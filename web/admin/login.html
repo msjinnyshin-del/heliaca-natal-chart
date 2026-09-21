@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#020606">
+  <title>Heliaca 관리자 로그인</title>
+  <link rel="icon" href="/assets/heliaca-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body class="adm-login-body">
+  <main class="adm-login">
+    <img class="brand-logo" src="/assets/heliaca-logo.svg" alt="Heliaca">
+    <p class="plate-number">ADMIN / SIGN IN</p>
+    <h1>관리자 로그인</h1>
+    <form id="login-form" method="post" action="/admin/login">
+      <label class="field"><span>비밀번호</span><input id="password" name="password" type="password" autocomplete="current-password" required autofocus></label>
+      <button class="copy-button" type="submit">로그인</button>
+    </form>
+    <p id="login-message" class="adm-message" role="alert"></p>
+  </main>
+  <script type="module" src="/admin/login.js"></script>
+</body>
+</html>

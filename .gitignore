@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+ref/
+artifacts/
+.superpowers/
+data/admin.sqlite3*
+.omc/
+.env
+.env.*
+!.env.example
+.vercel/

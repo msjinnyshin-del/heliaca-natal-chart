@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Heliaca — 당신이 태어난 순간의 하늘을 정밀하게 계산하는 네이털 차트">
+  <meta name="theme-color" content="#020606">
+  <title>Heliaca · 당신의 시작을 비추는 별의 지도</title>
+  <link rel="icon" href="/assets/heliaca-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#chart-form">출생 정보 입력으로 건너뛰기</a>
+
+  <header class="masthead">
+    <a class="brand-block" href="#top" aria-label="Heliaca 처음으로">
+      <img class="brand-logo" src="/assets/heliaca-logo.svg" alt="Heliaca">
+    </a>
+    <div class="mast-meta" aria-label="계산 원칙">
+      <span>raw longitude</span>
+      <span>traceable settings</span>
+      <span>no silent fallback</span>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-title">
+      <canvas id="cosmos-field" class="cosmos-field" aria-hidden="true"></canvas>
+      <div class="hero-index" aria-hidden="true"><span>00</span><span>FIRST LIGHT / CELESTIAL RECORD</span></div>
+      <div class="hero-content">
+        <img class="hero-mark" src="/assets/heliaca-mark.svg" alt="" aria-hidden="true">
+        <p class="eyebrow">YOUR SKY, PRECISELY MAPPED</p>
+        <h1 id="hero-title">태어난 순간의 빛으로,<br><em>나를 읽는 새로운 시선.</em></h1>
+        <p class="hero-copy">당신의 시작을 비추는 별의 지도.</p>
+        <a class="hero-cta" href="#chart-form"><span>내 차트 계산하기</span><span aria-hidden="true">↘</span></a>
+      </div>
+      <div class="hero-coordinate hero-coordinate-left" aria-hidden="true">TROPICAL <i></i> GEOCENTRIC</div>
+      <div class="hero-coordinate hero-coordinate-right" aria-hidden="true">SWISS EPHEMERIS <i></i> 360°</div>
+      <p class="hero-caption">FIRST LIGHT / HORIZON SIGNAL<br>장식 궤도와 계산 결과는 분리됩니다</p>
+    </section>
+
+    <section class="input-station" aria-labelledby="input-title">
+      <div class="input-heading">
+        <div>
+          <p class="plate-number">01 / BIRTH INPUT</p>
+          <h2 id="input-title">당신이 태어난 순간</h2>
+        </div>
+        <p class="scope-note">알고 있는 출생 정보를 입력하세요. 위치와 시간대는 출생지를 검색하면 함께 확인할 수 있습니다.</p>
+      </div>
+
+      <form id="chart-form" novalidate>
+        <div class="fields-grid">
+          <label class="field field-name"><span>이름 <em>선택</em></span><input id="name" name="name" autocomplete="name" placeholder="차트 제목에 표시할 이름 · 닉네임"></label>
+          <label class="field field-date"><span>생년월일 <b>양력 · Gregorian</b></span><input id="date" name="date" type="date" required></label>
+          <label class="field field-time"><span>태어난 시각 <b>현지 시각</b></span><input id="time" name="time" type="time" step="1" required></label>
+
+          <div class="place-field">
+            <label class="field-label" for="place">출생지</label>
+            <div class="place-search-row">
+              <input id="place" name="place" type="search" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="place-results" aria-describedby="place-status place-warning place-privacy" aria-expanded="false" autocomplete="off" placeholder="예: 서울, 부산, New York" required>
+              <button id="place-search-button" class="place-search-button" type="button">출생지 검색</button>
+            </div>
+            <p id="place-status" class="place-status" aria-live="polite">도시·지역·국가를 입력한 뒤 검색하세요.</p>
+            <ul id="place-results" class="place-results" role="listbox" aria-label="출생지 검색 결과" hidden></ul>
+            <p id="place-warning" class="place-warning" role="alert" hidden></p>
+            <p id="place-privacy" class="place-privacy">출생지 검색 시 도시 검색어만 외부 서비스에 전송됩니다. 이름과 생년월일시는 전송하지 않습니다. 데이터: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a></p>
+          </div>
+
+          <div class="location-controls">
+            <label class="manual-location-control"><input id="manual-location-toggle" type="checkbox"> <span>좌표 직접 입력</span></label>
+            <details id="location-details" class="settings-details location-details">
+              <summary>선택된 위치의 좌표와 시간대 확인</summary>
+              <div class="location-grid">
+                <label class="field"><span>위도 <b>N + / S −</b></span><input id="latitude" name="latitude" type="number" step="any" min="-90" max="90" readonly required></label>
+                <label class="field"><span>경도 <b>E + / W −</b></span><input id="longitude" name="longitude" type="number" step="any" min="-180" max="180" readonly required></label>
+                <label class="field"><span>IANA timezone</span><input id="timezone" name="timezone" spellcheck="false" readonly required></label>
+              </div>
+            </details>
+          </div>
+
+          <label class="field field-house">
+            <span>House system <b>하우스 시스템</b></span>
+            <select id="house-system" name="house_system">
+              <option value="P">Placidus · P</option><option value="W">Whole Sign · W</option><option value="E">Equal · E</option><option value="K">Koch · K</option><option value="O">Porphyry · O</option>
+            </select>
+          </label>
+          <fieldset class="field radio-field"><legend>North Node <b>북교점 방식</b></legend><label><input type="radio" name="node_mode" value="true" checked> True</label><label><input type="radio" name="node_mode" value="mean"> Mean</label></fieldset>
+
+          <details id="aspect-options" class="settings-details aspect-options">
+            <summary>어스펙트 대상과 point orb 설정</summary>
+            <p class="settings-intro">기본 행성에 더해 계산에 포함할 점을 선택하세요. point orb는 각 추가점에 허용할 최대 각도입니다.</p>
+            <div class="aspect-target-grid" aria-label="어스펙트 추가 대상">
+              <label><input type="checkbox" name="aspect_chiron" checked> Chiron</label>
+              <label><input type="checkbox" name="aspect_lilith" checked> Lilith</label>
+              <label><input type="checkbox" name="aspect_angles" checked> ASC · MC</label>
+              <label><input type="checkbox" name="aspect_nodes"> Lunar Nodes</label>
+              <label><input type="checkbox" name="aspect_lots"> Lots</label>
+            </div>
+            <div class="orb-grid">
+              <label><span>Chiron</span><input id="orb-chiron" name="orb_chiron" type="number" min="0" max="3" step="0.1" value="3" required><b>°</b></label>
+              <label><span>Nodes</span><input id="orb-nodes" name="orb_nodes" type="number" min="0" max="3" step="0.1" value="3" required><b>°</b></label>
+              <label><span>Lilith</span><input id="orb-lilith" name="orb_lilith" type="number" min="0" max="3" step="0.1" value="3" required><b>°</b></label>
+              <label><span>Lots</span><input id="orb-lots" name="orb_lots" type="number" min="0" max="3" step="0.1" value="3" required><b>°</b></label>
+              <label><span>Angles</span><input id="orb-angles" name="orb_angles" type="number" min="0" max="3" step="0.1" value="3" required><b>°</b></label>
+            </div>
+          </details>
+        </div>
+        <div class="form-footer">
+          <div class="form-notes">
+            <p><strong>1970년 이후의 알려진 출생 시각만 지원합니다.</strong> 시각을 모르면 ASC·MC·하우스를 정확히 계산할 수 없으므로 임의의 시각을 입력하지 마세요.</p>
+            <p id="storage-notice" class="storage-notice">차트 계산 시 입력한 이름·출생 정보는 서비스 운영을 위해 저장되며 관리자만 열람합니다. 삭제를 원하시면 요청해 주세요.</p>
+          </div>
+          <button id="calculate-button" class="calculate-button" type="submit" aria-describedby="storage-notice"><span>차트 계산</span><span aria-hidden="true">↗</span></button>
+        </div>
+      </form>
+    </section>
+
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+
+    <section id="chart-workbench" class="workbench" aria-labelledby="result-title" aria-busy="false">
+      <div class="result-heading">
+        <div class="result-title-block">
+          <p class="plate-number">02 / CALCULATED SKY</p>
+          <h2 id="result-title">차트가 이곳에 펼쳐집니다</h2>
+          <p id="result-subtitle" class="result-subtitle">출생 정보를 입력하고 차트 계산을 눌러주세요.</p>
+        </div>
+        <div class="result-tools">
+          <p class="copy-guidance">계산된 차트와 해석 요청문을 복사해 ChatGPT에 붙여넣으세요. 출생 정보가 포함되며 자동 전송하지 않습니다.</p>
+          <div class="result-actions">
+            <span id="freshness-badge" class="status-badge is-waiting">입력 대기</span>
+            <button id="copy-markdown" class="copy-button" type="button" disabled>해석용 MD 복사</button>
+            <button id="preview-markdown" class="text-button" type="button" disabled>미리보기</button>
+            <button id="download-svg" class="text-button" type="button" disabled>SVG 저장</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="primary-grid">
+        <figure class="chart-panel" aria-labelledby="wheel-caption">
+          <div id="chart-stage" class="chart-stage"><div class="chart-placeholder" aria-hidden="true"><span>✦</span></div></div>
+          <figcaption id="wheel-caption">ASC를 왼쪽에 둔 tropical wheel. 바깥 사인은 균등 30°, 안쪽 하우스는 실제 cusp 간격입니다.</figcaption>
+        </figure>
+        <section class="positions-panel" aria-labelledby="positions-title">
+          <div class="section-heading"><div><p class="plate-number">POSITION REGISTER</p><h3 id="positions-title">천체와 주요점</h3></div><span id="sect-chip" class="sect-chip">—</span></div>
+          <div class="table-scroll"><table><thead><tr><th scope="col">대상</th><th scope="col">위치</th><th scope="col">H</th><th scope="col">운동</th></tr></thead><tbody id="positions-body"><tr><td colspan="4" class="empty-cell">계산 대기 중</td></tr></tbody></table></div>
+          <dl id="angle-list" class="angle-list"></dl>
+        </section>
+      </div>
+
+      <section class="detail-deck" aria-label="차트 세부 정보">
+        <div class="tab-list" role="tablist" aria-label="결과 보기">
+          <button id="tab-aspects" role="tab" aria-selected="true" aria-controls="panel-aspects">어스펙트</button>
+          <button id="tab-houses" role="tab" aria-selected="false" aria-controls="panel-houses" tabindex="-1">하우스</button>
+          <button id="tab-evidence" role="tab" aria-selected="false" aria-controls="panel-evidence" tabindex="-1">계산 근거</button>
+        </div>
+        <div id="panel-aspects" role="tabpanel" aria-labelledby="tab-aspects"><div id="aspect-register" class="detail-content empty-state">계산 후 주요 어스펙트가 표시됩니다.</div></div>
+        <div id="panel-houses" role="tabpanel" aria-labelledby="tab-houses" hidden><div id="house-register" class="detail-content empty-state">계산 후 12개 cusp가 표시됩니다.</div></div>
+        <div id="panel-evidence" role="tabpanel" aria-labelledby="tab-evidence" hidden><div id="evidence-register" class="detail-content empty-state">엔진·시간대·UTC·프로필 정보가 표시됩니다.</div></div>
+      </section>
+    </section>
+
+    <aside class="method-note" aria-labelledby="method-title">
+      <p class="plate-number">METHOD / LIMITS</p><h2 id="method-title">보이는 수치만 말합니다.</h2>
+      <div class="method-grid">
+        <p>행성·하우스·어스펙트는 서버의 검증된 계산 결과를 그대로 사용합니다. 라벨을 움직여도 실제 황경 tick과 leader는 유지합니다.</p>
+        <p><strong>Almuten Figuris, Auriga, Doryphoros</strong>는 규칙이 검증되지 않아 비활성입니다. 이 화면은 천문 계산의 재현성을 보여주며 점성술의 과학적 타당성을 보증하지 않습니다.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer><span class="footer-brand"><img src="/assets/heliaca-mark.svg" alt="">Heliaca · 당신의 시작을 비추는 별의 지도.</span><span>입력 정보는 서비스 운영 목적으로 저장되며 요청 시 삭제합니다.</span></footer>
+  <script type="module" src="/cosmos.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

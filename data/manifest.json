@@ -1,0 +1,17 @@
+{
+  "engine": "Swiss Ephemeris",
+  "engine_version": "2.10.03",
+  "binding_version": "2.10.3.2",
+  "tzdata": "2025.2",
+  "tzdb": "2025b",
+  "source_commit": "9083a12d59e98034fb2337061481ac8800c16e64",
+  "source": "https://github.com/aloistr/swisseph/tree/9083a12d59e98034fb2337061481ac8800c16e64/ephe",
+  "files": [
+    {"name": "sepl_18.se1", "sha256": "ca1393ceab3a44fbc895887cf789c68819ae6a1cbc9b22225872dbe4ccd99a66", "range": "1800-2399", "purpose": "planets"},
+    {"name": "semo_18.se1", "sha256": "1ca07bd67c24374d77226180c20a4f9996cba013697894810518e7eb582ca4f7", "range": "1800-2399", "purpose": "Moon"},
+    {"name": "seas_18.se1", "sha256": "a2cd8fc33807c78ca9a700c91c2e042258b12fc4796519e00781440b5ad8b2e2", "range": "1800-2399", "purpose": "Chiron"}
+  ],
+  "supported_birth_dates": "local Gregorian dates from 1970-01-01, with resolved UTC instant no later than now",
+  "time_policy": "Swiss utc_to_jd; internal leap-second table, built-in Delta T; leap-second civil input rejected; pre-1970 requires historical timezone review",
+  "license": "Swiss Ephemeris AGPL or Professional; public deployment not approved"
+}
