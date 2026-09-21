@@ -11,3 +11,9 @@ data/admin.sqlite3*
 .env.*
 !.env.example
 .vercel/
+.vercel
+.env*
+.agents/
+.claude/
+skills-lock.json
+ADMIN_CREDENTIALS.txt
