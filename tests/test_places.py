@@ -221,3 +221,16 @@ class PlacesHTTPTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PopulationRankingTests(unittest.TestCase):
+    def test_major_city_first_and_tiny_only_results_warn(self):
+        from natal.places import normalize_response
+        base = {"country": "미국", "country_code": "US", "timezone": "America/Chicago"}
+        small = dict(base, id=1, name="게인즈빌", admin1="앨라배마주", latitude=32.8, longitude=-88.1, population=197)
+        big = dict(base, id=2, name="게인즈빌", admin1="플로리다주", latitude=29.6, longitude=-82.3, population=145214,
+                   timezone="America/New_York")
+        result = normalize_response({"results": [small, big]})
+        self.assertEqual([item["admin1"] for item in result["results"]], ["플로리다주", "앨라배마주"])
+        self.assertEqual(result["warnings"], [])
+        self.assertIn("철자", normalize_response({"results": [small]})["warnings"][0])

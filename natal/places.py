@@ -141,10 +141,18 @@ def normalize_response(payload):
         item["provider"] = "Open-Meteo / GeoNames"
         item["provider_version"] = "live API v1; dataset version not supplied"
         item["timezone_validation"] = "IANA 2025b identifier; historical geographic boundary not independently verified"
+        population = row.get("population")
+        item["population"] = population if type(population) is int and population >= 0 else None
         results.append(item)
     if rows and not results:
         raise PlaceSearchError("PLACE_SEARCH_INVALID_RESPONSE", "검색 후보에 유효한 좌표·시간대가 없습니다. 다른 도시명으로 검색하거나 직접 입력하세요.")
+    # The provider has no typo tolerance; surface major cities first and flag
+    # result sets that only contain tiny localities (often a misspelling).
+    results.sort(key=lambda item: -(item["population"] or 0))
     warnings = [f"좌표·시간대 등 필수 정보가 유효하지 않은 후보 {excluded}개를 제외했습니다."] if excluded else []
+    known = [item["population"] for item in results if item["population"] is not None]
+    if known and max(known) < 1000:
+        warnings.append("작은 지역만 검색되었습니다. 찾는 도시가 없으면 철자를 확인하세요(예: Gainesville).")
     return {"results": results[:MAX_RESULTS], "attribution": deepcopy(ATTRIBUTION), "warnings": warnings}
 
 
