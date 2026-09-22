@@ -102,7 +102,8 @@ def normalize_location_source(payload, latitude, longitude, timezone_name):
     return dict(source)
 
 
-def calculate_chart(payload):
+def calculate_chart(payload, allow_future=False):
+    """allow_future is an internal switch for transit moments; it is never read from the request payload."""
     if not isinstance(payload, dict):
         raise ChartError("INVALID_INPUT", "입력은 JSON 객체여야 합니다.")
     latitude, longitude = coordinate(payload, "latitude", 90), coordinate(payload, "longitude", 180)
@@ -111,7 +112,7 @@ def calculate_chart(payload):
         raise ChartError("INVALID_INPUT", "지원하지 않는 하우스 또는 Node 설정입니다.")
     aspect_profile = normalize_aspect_profile(payload.get("aspect_profile"))
     solar_payload, calendar_conversion = convert_calendar(payload)
-    utc, offset, zone, resolution = resolve_time(solar_payload)
+    utc, offset, zone, resolution = resolve_time(solar_payload, allow_future=allow_future)
     location_source = normalize_location_source(payload, latitude, longitude, zone)
     with ENGINE_LOCK:
         manifest = validate_data()

@@ -11,11 +11,19 @@ cd natal-chart   # 이 저장소 폴더
 .venv/bin/python server.py --port 8765
 ```
 
-브라우저: <http://127.0.0.1:8765> · 시너스트리: <http://127.0.0.1:8765/synastry.html>
+브라우저: <http://127.0.0.1:8765> · 시너스트리 `/synastry.html` · 컴포지트 `/composite.html` · 트랜짓 `/transits.html`
 
 ### 시너스트리 (`/synastry.html`, `POST /api/synastry`)
 
 두 사람의 차트를 각각 기존 엔진으로 계산한 뒤 `natal/synastry.py`(규칙 `synastry-v2`)가 상호 어스펙트와 하우스 오버레이를 만든다. orb는 합·대립 6°, 스퀘어·트라인 5°, 섹스타일 4°, 퀸컹스 2°(해·달 +1°), Chiron·North Node·ASC·MC는 2°이며 ASC–ASC 같은 각도끼리는 제외한다. 강도(`strength`)는 표시 정렬용 가중치이며 판정에 쓰지 않는다. 입력은 저장하지 않지만, 사용자가 “저장하고 링크 만들기”를 누르면 `shares` 테이블에 입력이 저장되고 추측 불가능한 토큰 링크(`/synastry.html?s=<token>`)가 발급된다. 삭제 키는 만든 브라우저(localStorage)에만 있고 서버에는 해시로 저장된다. **Postgres 배포 시 `db/schema.sql`의 `shares` 테이블을 수동으로 적용해야 한다.**
+
+### 컴포지트 (`/composite.html`, `POST /api/composite`)
+
+`natal/composite.py`(`composite-midpoint-v1`): 천체·ASC·MC는 두 네이털 황경의 짧은 호 미드포인트, 하우스 커스프는 커스프별 미드포인트(순서가 깨지면 180° 반대편 선택), 어스펙트는 네이털과 같은 major 규칙. 출생 시각이 필요하며 정오 가정값을 쓰지 않는다. 시너스트리와 같은 방식으로 공유 링크(`kind=composite`)를 만들 수 있다.
+
+### 트랜짓 (`/transits.html`, `POST /api/transits`)
+
+`natal/transits.py`(`transit-v1`): 네이털 차트와 지정 시점(기본 브라우저의 지금·시간대)의 행성을 겹친다. orb는 합·스퀘어·트라인·대립 3°, 섹스타일 2°, 퀸컹스 1°이며 접근/분리는 해당 시점의 속도로 판정한다. 트랜짓 시점만 내부 플래그(`allow_future`)로 2100년까지 미래를 허용하고, 출생 입력의 미래 거부는 그대로다. 모호한 DST 시각은 fold 0으로 정한다. ±1/7/30일 이동 버튼으로 흐름을 본다. 저장·공유는 하지 않는다.
 
 새 환경에서는 Python 3.9 이상과 아래 설치가 필요하다.
 

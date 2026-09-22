@@ -24,6 +24,19 @@ ADMIN_PRIVATE_FILES = {"index.html", "admin.js"}
 VERCEL_HOST_VARS = ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL")
 
 
+CALCULATORS = {"/api/synastry": ("natal.synastry", "calculate_synastry"),
+               "/api/composite": ("natal.composite", "calculate_composite"),
+               "/api/transits": ("natal.transits", "calculate_transits")}
+SHARE_KINDS = {"synastry": CALCULATORS["/api/synastry"], "composite": CALCULATORS["/api/composite"]}
+
+
+def load_calculator(spec):
+    # Import on request so private engine/data cannot become static routes.
+    import importlib
+    module, name = spec
+    return getattr(importlib.import_module(module), name)
+
+
 def serverless():
     return bool(os.environ.get("VERCEL"))
 
@@ -240,8 +253,8 @@ class ChartHandler(BaseHTTPRequestHandler):
         if self.is_admin_route():
             self.admin_post(route)
             return
-        if route == "/api/synastry":
-            self.synastry()
+        if route in CALCULATORS:
+            self.calculate_tool(route)
             return
         if route == "/api/share":
             self.share_create()
@@ -280,21 +293,15 @@ class ChartHandler(BaseHTTPRequestHandler):
         self.record(payload, client, result=result)
         self.send_json(200, result)
 
-    def synastry(self):
-        body = self.read_body()
-        if body is None:
+    def calculate_tool(self, route):
+        payload = self.json_body()
+        if payload is None:
             return
-        try:
-            payload = self.parse_json_object(body[1])
-        except (ValueError, UnicodeError):
-            self.error_json(400, "INVALID_JSON", "올바른 JSON 객체를 입력해 주세요.")
-            return
-        # Synastry inputs are not stored; the client context is accepted and dropped.
+        # Multi-chart tools are not stored; the client context is accepted and dropped.
         payload.pop("client", None)
         from natal.errors import ChartError
-        from natal.synastry import calculate_synastry
         try:
-            result = calculate_synastry(payload)
+            result = load_calculator(CALCULATORS[route])(payload)
         except ChartError as error:
             self.error_json(422, error.code, str(error), getattr(error, "details", None))
             return
@@ -319,28 +326,27 @@ class ChartHandler(BaseHTTPRequestHandler):
             return
         from natal import shares, store
         from natal.errors import ChartError
-        from natal.synastry import calculate_synastry
         names = payload.get("names") if isinstance(payload.get("names"), dict) else {}
-        if payload.get("kind") != "synastry" or not isinstance(payload.get("input"), dict):
-            self.error_json(422, "INVALID_INPUT", "kind=synastry와 input 객체가 필요합니다.")
+        kind = payload.get("kind")
+        if kind not in SHARE_KINDS or not isinstance(payload.get("input"), dict):
+            self.error_json(422, "INVALID_INPUT", "kind(synastry/composite)와 input 객체가 필요합니다.")
             return
         try:
-            calculate_synastry(payload["input"])  # only shareable if it calculates cleanly
+            load_calculator(SHARE_KINDS[kind])(payload["input"])  # only shareable if it calculates cleanly
         except ChartError as error:
             self.error_json(422, error.code, str(error), getattr(error, "details", None))
             return
         stored = {"names": {key: store.clean_name(names.get(key)) for key in ("a", "b")}, "input": payload["input"]}
         try:
-            token, delete_key = shares.create_share("synastry", payload.get("title"), stored)
+            token, delete_key = shares.create_share(kind, payload.get("title"), stored)
         except Exception:
             self.error_json(503, "SHARE_UNAVAILABLE", "공유 링크 저장소를 사용할 수 없습니다.")
             return
-        self.send_json(201, {"token": token, "path": f"/synastry.html?s={token}", "delete_key": delete_key})
+        self.send_json(201, {"token": token, "path": f"/{kind}.html?s={token}", "delete_key": delete_key})
 
     def share_get(self, token):
         from natal import shares
         from natal.errors import ChartError
-        from natal.synastry import calculate_synastry
         try:
             share = shares.get_share(token)
         except Exception:
@@ -350,7 +356,7 @@ class ChartHandler(BaseHTTPRequestHandler):
             self.error_json(404, "SHARE_NOT_FOUND", "공유 링크가 없거나 삭제되었습니다.")
             return
         try:
-            result = calculate_synastry(share["payload"]["input"])
+            result = load_calculator(SHARE_KINDS[share["kind"]])(share["payload"]["input"])
         except ChartError as error:
             self.error_json(422, error.code, str(error), getattr(error, "details", None))
             return

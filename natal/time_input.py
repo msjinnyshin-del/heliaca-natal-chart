@@ -53,7 +53,7 @@ def convert_calendar(payload):
     return {**payload, "calendar": "gregorian", "date": solar, "lunar_leap": None}, record
 
 
-def resolve_time(payload):
+def resolve_time(payload, allow_future=False):
     if payload.get("calendar", "gregorian") != "gregorian":
         raise ChartError("INVALID_INPUT", "Gregorian 양력만 지원합니다.")
     if payload.get("time_accuracy", "reported") != "reported":
@@ -96,6 +96,8 @@ def resolve_time(payload):
         options = [{**c, "utc": c["utc"].isoformat().replace("+00:00", "Z")} for c in candidates]
         raise ChartError("AMBIGUOUS_LOCAL_TIME", "두 번 존재하는 현지 시각입니다. UTC 후보를 선택하세요.", {"candidates": options})
     chosen = next((c for c in candidates if c["fold"] == chosen_fold), candidates[0])
-    if chosen["utc"] > now_utc():
+    if allow_future and local_date.year > 2100:
+        raise ChartError("UNSUPPORTED_DATE", "트랜짓 시점은 2100년까지 지원합니다.")
+    if not allow_future and chosen["utc"] > now_utc():
         raise ChartError("UNSUPPORTED_DATE", "미래 출생 시각은 네이털 입력에서 지원하지 않습니다.")
     return chosen["utc"], chosen["offset"], zone_name, "second" if len(time_text) == 8 else "minute"

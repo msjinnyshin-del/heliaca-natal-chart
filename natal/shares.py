@@ -11,7 +11,7 @@ import secrets
 from . import store
 
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{22}$")
-KINDS = {"synastry"}
+KINDS = {"synastry", "composite"}
 
 
 def _hash(key):

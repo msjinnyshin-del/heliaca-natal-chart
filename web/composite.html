@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Heliaca 시너스트리 — 두 사람의 네이털 차트를 겹쳐 행성 간 어스펙트와 하우스 오버레이를 계산합니다">
+  <meta name="description" content="Heliaca 컴포지트 — 두 네이털 차트의 미드포인트로 관계 자체의 차트를 계산합니다">
   <meta name="theme-color" content="#020606">
-  <title>Heliaca · 시너스트리 차트</title>
+  <title>Heliaca · 컴포지트 차트</title>
   <link rel="icon" href="/assets/heliaca-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
 </head>
@@ -15,23 +15,23 @@
     <a class="brand-block" href="/" aria-label="Heliaca 네이털 차트로">
       <img class="brand-logo" src="/assets/heliaca-logo.svg" alt="Heliaca">
     </a>
-    <nav class="mast-nav" aria-label="도구"><a href="/">네이털 차트</a><a href="/synastry.html" aria-current="page">시너스트리</a><a href="/composite.html">컴포지트</a><a href="/transits.html">트랜짓</a></nav>
+    <nav class="mast-nav" aria-label="도구"><a href="/">네이털 차트</a><a href="/synastry.html">시너스트리</a><a href="/composite.html" aria-current="page">컴포지트</a><a href="/transits.html">트랜짓</a></nav>
   </header>
 
   <main id="top">
     <section class="input-station" aria-labelledby="input-title">
       <div class="input-heading">
         <div>
-          <p class="plate-number">TOOL 02 / SYNASTRY</p>
-          <h2 id="input-title">두 사람의 하늘을 겹쳐 보기</h2>
+          <p class="plate-number">TOOL 03 / COMPOSITE</p>
+          <h2 id="input-title">두 사람 사이의 세 번째 차트</h2>
         </div>
-        <p class="scope-note">두 네이털 차트를 한 바퀴에 겹쳐, 한 사람의 행성이 다른 사람의 행성·하우스와 맺는 모든 관계를 계산합니다. 궁합 점수가 아니라 두 사람이 만나는 방식의 지도입니다.</p>
+        <p class="scope-note">두 사람의 행성·각도·하우스 커스프를 각각 미드포인트로 합쳐 “관계 그 자체”의 차트를 만듭니다. 누구의 것도 아닌, 둘 사이에서 생겨나는 초상입니다.</p>
       </div>
 
       <form id="tool-form" novalidate>
         <div class="synastry-people">
-          <div id="person-a-slot" data-prefix="a-" data-label="나 · PERSON A" data-short="나(A)"></div>
-          <div id="person-b-slot" data-prefix="b-" data-label="상대 · PERSON B" data-short="상대(B)"></div>
+          <div data-prefix="a-" data-label="나 · PERSON A" data-short="나(A)"></div>
+          <div data-prefix="b-" data-label="상대 · PERSON B" data-short="상대(B)"></div>
         </div>
         <div class="fields-grid synastry-shared">
           <label class="field field-house">
@@ -44,10 +44,10 @@
         </div>
         <div class="form-footer">
           <div class="form-notes">
-            <p><strong>두 사람 모두 1900년 이후의 알려진 출생 시각이 필요합니다.</strong> 출생 시각이 틀리면 ASC·MC와 하우스 오버레이가 달라집니다.</p>
-            <p class="storage-notice">시너스트리 입력은 ‘저장하고 링크 만들기’를 누르기 전까지 서버에 저장하지 않습니다. 출생지 검색 시 도시 검색어만 외부 서비스(Open-Meteo · GeoNames)로 전송됩니다.</p>
+            <p><strong>두 사람 모두 1900년 이후의 알려진 출생 시각이 필요합니다.</strong> 시각을 임의로 넣으면 컴포지트 ASC·MC·하우스가 달라지므로 정오 등 가정값을 쓰지 않습니다.</p>
+            <p class="storage-notice">입력은 ‘저장하고 링크 만들기’를 누르기 전까지 서버에 저장하지 않습니다. 출생지 검색 시 도시 검색어만 외부 서비스(Open-Meteo · GeoNames)로 전송됩니다.</p>
           </div>
-          <button id="calculate-button" class="calculate-button" type="submit"><span>시너스트리 그리기</span><span aria-hidden="true">↗</span></button>
+          <button id="calculate-button" class="calculate-button" type="submit"><span>컴포지트 그리기</span><span aria-hidden="true">↗</span></button>
         </div>
       </form>
     </section>
@@ -58,9 +58,9 @@
     <section id="tool-workbench" class="workbench" aria-labelledby="result-title" aria-busy="false">
       <div class="result-heading">
         <div class="result-title-block">
-          <p class="plate-number">02 / OVERLAID SKY</p>
-          <h2 id="result-title">두 차트가 이곳에 겹쳐집니다</h2>
-          <p id="result-subtitle" class="result-subtitle">두 사람의 출생 정보를 입력하고 시너스트리 그리기를 눌러주세요.</p>
+          <p class="plate-number">02 / RELATIONSHIP CHART</p>
+          <h2 id="result-title">관계의 차트가 이곳에 그려집니다</h2>
+          <p id="result-subtitle" class="result-subtitle">두 사람의 출생 정보를 입력하고 컴포지트 그리기를 눌러주세요.</p>
         </div>
         <div class="result-tools"><div class="result-actions">
           <span id="freshness-badge" class="status-badge is-waiting">입력 대기</span>
@@ -71,23 +71,23 @@
       <div class="primary-grid">
         <figure class="chart-panel">
           <div id="chart-stage" class="chart-stage"><div class="chart-placeholder" aria-hidden="true"><span>✦</span></div></div>
-          <figcaption>안쪽: <span class="syn-key-a">A</span>의 하우스와 행성(A의 ASC가 왼쪽) · 바깥 띠: <span class="syn-key-b">B</span>의 행성 · 중앙선: 두 사람 사이 어스펙트</figcaption>
+          <figcaption>미드포인트 컴포지트 · 짧은 호 미드포인트 · 커스프 미드포인트 하우스(순서 보정). 역행·주야는 정의되지 않습니다.</figcaption>
         </figure>
         <section class="positions-panel" aria-labelledby="positions-title">
-          <div class="section-heading"><div><p class="plate-number">SIDE BY SIDE</p><h3 id="positions-title">두 사람의 배치</h3></div></div>
-          <div class="table-scroll"><table><thead><tr><th scope="col">대상</th><th scope="col" id="col-a">A</th><th scope="col" id="col-b">B</th></tr></thead><tbody id="positions-body"><tr><td colspan="3" class="empty-cell">계산 대기 중</td></tr></tbody></table></div>
+          <div class="section-heading"><div><p class="plate-number">POSITIONS</p><h3 id="positions-title">관계의 행성</h3></div></div>
+          <div class="table-scroll"><table><thead><tr><th scope="col">대상</th><th scope="col">위치</th><th scope="col">H</th></tr></thead><tbody id="positions-body"><tr><td colspan="3" class="empty-cell">계산 대기 중</td></tr></tbody></table></div>
         </section>
       </div>
 
       <section class="detail-deck" aria-label="시너스트리 세부 정보">
         <div class="tab-list" role="tablist" aria-label="결과 보기">
-          <button id="tab-aspects" role="tab" aria-selected="true" aria-controls="panel-aspects">상호 어스펙트</button>
-          <button id="tab-overlays" role="tab" aria-selected="false" aria-controls="panel-overlays" tabindex="-1">하우스 오버레이</button>
+          <button id="tab-aspects" role="tab" aria-selected="true" aria-controls="panel-aspects">어스펙트</button>
+          <button id="tab-houses" role="tab" aria-selected="false" aria-controls="panel-houses" tabindex="-1">하우스</button>
           <button id="tab-evidence" role="tab" aria-selected="false" aria-controls="panel-evidence" tabindex="-1">계산 근거</button>
         </div>
-        <div id="panel-aspects" role="tabpanel" aria-labelledby="tab-aspects"><div id="aspect-register" class="detail-content empty-state">계산 후 두 차트 사이 어스펙트가 강도 순으로 표시됩니다.</div></div>
-        <div id="panel-overlays" role="tabpanel" aria-labelledby="tab-overlays" hidden><div id="overlay-register" class="detail-content empty-state">계산 후 서로의 하우스에 놓인 행성이 표시됩니다.</div></div>
-        <div id="panel-evidence" role="tabpanel" aria-labelledby="tab-evidence" hidden><div id="evidence-register" class="detail-content empty-state">orb 규칙과 두 차트의 UTC·시간대가 표시됩니다.</div></div>
+        <div id="panel-aspects" role="tabpanel" aria-labelledby="tab-aspects"><div id="aspects-register" class="detail-content empty-state">계산 후 컴포지트 자체의 어스펙트가 표시됩니다.</div></div>
+        <div id="panel-houses" role="tabpanel" aria-labelledby="tab-houses" hidden><div id="houses-register" class="detail-content empty-state">계산 후 12개 cusp가 표시됩니다.</div></div>
+        <div id="panel-evidence" role="tabpanel" aria-labelledby="tab-evidence" hidden><div id="evidence-register" class="detail-content empty-state">미드포인트 규칙과 두 차트의 UTC가 표시됩니다.</div></div>
       </section>
 
       <section id="share-panel" class="share-panel" aria-labelledby="share-title" hidden>
@@ -116,6 +116,6 @@
   </main>
 
   <footer><span class="footer-brand"><img src="/assets/heliaca-mark.svg" alt="">Heliaca · 당신의 시작을 비추는 별의 지도.</span><span>공유 링크를 만든 경우에만 입력이 저장되며, 만든 브라우저에서 삭제할 수 있습니다.</span></footer>
-  <script type="module" src="/synastry.js"></script>
+  <script type="module" src="/composite.js"></script>
 </body>
 </html>

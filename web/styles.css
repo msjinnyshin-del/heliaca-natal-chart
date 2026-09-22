@@ -423,3 +423,7 @@ footer { display: flex; align-items: center; justify-content: space-between; gap
 .saved-list a { color: var(--teal-bright); overflow-wrap: anywhere; }
 .saved-list small { color: var(--ink-faint); font-family: var(--mono); }
 @media (max-width: 860px) { .share-panel { grid-template-columns: 1fr; } }
+.single-person { grid-template-columns: minmax(0, 1fr); max-width: 48rem; }
+.transit-moment .field-date, .transit-moment .field-time, .transit-moment .field-name { grid-column: span 4; }
+.scrub-bar { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; margin: 2rem 0 1rem; }
+.register-subhead { margin: 1.2rem 0 .4rem; color: var(--ink-soft); font: 650 .66rem var(--mono); letter-spacing: .08em; }

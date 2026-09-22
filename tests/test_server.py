@@ -100,6 +100,26 @@ class ServerTests(unittest.TestCase):
         status, _, _ = self.request("POST", "/api/share", json.dumps({"kind": "synastry", "input": {"person_a": person}}), json_headers)
         self.assertEqual(status, 422)
 
+    def test_composite_and_transit_endpoints(self):
+        person = {"date": "1990-05-15", "time": "14:30", "timezone": "Asia/Seoul", "latitude": 37.5665, "longitude": 126.978,
+                  "place": "Seoul", "house_system": "P", "node_mode": "true"}
+        json_headers = {"Content-Type": "application/json"}
+        pair = {"person_a": person, "person_b": {**person, "date": "1992-11-03"}}
+        status, _, raw = self.request("POST", "/api/composite", json.dumps(pair), json_headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(len(json.loads(raw)["composite"]["houses"]), 12)
+        status, _, raw = self.request("POST", "/api/share", json.dumps({"kind": "composite", "input": pair}), json_headers)
+        self.assertEqual(status, 201)
+        self.assertTrue(json.loads(raw)["path"].startswith("/composite.html?s="))
+        body = {"natal": person, "moment": {"date": "2026-09-22", "time": "09:00", "timezone": "Asia/Seoul"}}
+        status, _, raw = self.request("POST", "/api/transits", json.dumps(body), json_headers)
+        self.assertEqual(status, 200)
+        self.assertIn("transit_houses", json.loads(raw))
+        status, _, _ = self.request("POST", "/api/share", json.dumps({"kind": "transits", "input": body}), json_headers)
+        self.assertEqual(status, 422)
+        for page in ("/synastry.html", "/composite.html", "/transits.html", "/tool-page.js"):
+            self.assertEqual(self.request("GET", page)[0], 200)
+
     def test_real_chart_uses_engine_not_fixed_response(self):
         payload = {"date": "1985-07-14", "time": "21:45:00", "timezone": "America/New_York", "latitude": 40.7128, "longitude": -74.006, "place": "reference", "house_system": "P", "node_mode": "true", "time_accuracy": "reported"}
         status, _, raw = self.request("POST", "/api/chart", json.dumps(payload), {"Content-Type": "application/json"})
