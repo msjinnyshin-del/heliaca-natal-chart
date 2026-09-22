@@ -34,7 +34,7 @@ class BrowserChecks(unittest.TestCase):
         self.page.goto(BASE_URL)
         self.page.wait_for_load_state("networkidle")
         self.page.locator('#manual-location-toggle').check()
-        for field, value in {'date':'1985-07-14','time':'21:45:00','place':'New York, New York, USA','latitude':'40.7128','longitude':'-74.006','timezone':'America/New_York'}.items():
+        for field, value in {'date':'1985-07-14','time':'21:45','place':'New York, New York, USA','latitude':'40.7128','longitude':'-74.006','timezone':'America/New_York'}.items():
             self.page.locator('#' + field).fill(value)
         self.calculate()
         expect(self.page.locator("#positions-body tr")).to_have_count(16)
@@ -132,7 +132,7 @@ class BrowserChecks(unittest.TestCase):
         self.page.locator('#date').fill('2023-03-12')
         expect(self.page.locator('#copy-markdown')).to_be_disabled()
         expect(self.page.locator('#preview-markdown')).to_be_disabled()
-        self.page.locator('#time').fill('02:30:00')
+        self.page.locator('#time').fill('02:30')
         self.calculate()
         expect(self.page.locator('#message')).to_contain_text('NONEXISTENT_LOCAL_TIME')
         expect(self.page.locator('#copy-markdown')).to_be_disabled()
