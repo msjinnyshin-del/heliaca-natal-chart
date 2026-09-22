@@ -367,3 +367,59 @@ footer { display: flex; align-items: center; justify-content: space-between; gap
 .lunar-note[hidden] { display: none; }
 .calendar-toggle label { white-space: nowrap; }
 .field .calendar-toggle input { width: auto; flex: none; margin: 0; padding: 0; border: 0; box-shadow: none; accent-color: var(--teal); }
+
+/* Synastry */
+.mast-nav { display: flex; gap: 1.1rem; font: 650 .66rem var(--mono); letter-spacing: .08em; }
+.mast-nav a { color: var(--ink-soft); text-decoration: none; }
+.mast-nav a:hover, .mast-nav a[aria-current="page"] { color: var(--teal-bright); }
+.synastry-people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; }
+.synastry-person { margin: 0; padding: 0; min-width: 0; }
+.synastry-person .field-name { grid-column: 1 / -1; }
+.synastry-person .field-date, .synastry-person .field-time { grid-column: span 6; }
+.person-legend { padding: 0 0 .55rem; color: var(--teal); font: 750 .66rem var(--mono); letter-spacing: .14em; }
+.synastry-people > :nth-child(2) .person-legend { color: var(--gold); }
+.synastry-shared { margin-top: 1.2rem; }
+.syn-a { fill: var(--teal-bright); }
+.syn-b { fill: var(--gold); font-size: 19px; }
+.syn-b-tick { stroke: var(--gold); }
+.syn-divider { stroke: rgba(215, 187, 114, .45); }
+.syn-key-a { color: var(--teal-bright); }
+.syn-key-b { color: var(--gold); }
+.synastry-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.synastry-table th, .synastry-table td { padding: .5rem .6rem; border-bottom: 1px solid var(--rule); text-align: left; }
+.synastry-table th { color: var(--ink-faint); font: 650 .6rem var(--mono); letter-spacing: .08em; }
+.synastry-table .mono { font-family: var(--mono); color: var(--ink-soft); }
+.aspect-trine .aspect-name, .aspect-sextile .aspect-name { color: var(--teal); }
+.aspect-square .aspect-name, .aspect-opposition .aspect-name { color: var(--coral); }
+.aspect-conjunction .aspect-name { color: var(--gold); }
+.register-note { margin: 0 0 .8rem; color: var(--ink-faint); font-size: .72rem; }
+.overlay-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.overlay-block h4 { margin: 0 0 .6rem; color: var(--ink); font-family: var(--serif); font-weight: 500; }
+.overlay-list { margin: 0; }
+.overlay-list div { display: grid; grid-template-columns: 3rem 1fr; padding: .35rem 0; border-bottom: 1px solid var(--rule); font-size: .8rem; }
+.overlay-list dt { color: var(--ink-faint); font-family: var(--mono); }
+.overlay-list dd { margin: 0; color: var(--ink-soft); }
+@media (max-width: 860px) {
+  .synastry-people, .overlay-grid { grid-template-columns: 1fr; }
+}
+.more-toggle { margin-top: .8rem; }
+.more-toggle > summary { color: var(--teal); font: 650 .68rem var(--mono); cursor: pointer; padding: .5rem 0; }
+.overlay-sentences { margin: 0; padding: 0; list-style: none; }
+.overlay-sentences li { padding: .5rem 0; border-bottom: 1px solid var(--rule); color: var(--ink-faint); font-size: .84rem; }
+.overlay-sentences b { color: var(--ink); font-weight: 500; }
+.overlay-sentences li:not(.overlay-strong) b { color: var(--ink-soft); }
+.share-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2rem; margin-top: 2.5rem; padding-top: 2rem; border-top: 1px solid var(--rule); }
+.share-panel[hidden], .saved-panel[hidden], .shared-banner[hidden] { display: none; }
+.share-panel h3, .saved-panel h3 { margin: .3rem 0 .6rem; font-family: var(--serif); font-weight: 500; }
+.share-note { margin: 0; color: var(--ink-faint); font-size: .74rem; }
+.share-controls { display: grid; gap: .8rem; align-content: start; }
+.share-controls .copy-button { justify-self: start; }
+.share-result { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .5rem; align-items: center; }
+.share-result input { min-width: 0; border: 1px solid var(--rule-strong); padding: .55rem .7rem; color: var(--ink); background: var(--night); font: .72rem var(--mono); }
+.shared-banner { margin-top: 1.5rem; padding: .8rem 1rem; border: 1px solid rgba(215, 187, 114, .45); color: var(--gold); font-size: .8rem; }
+.saved-panel { margin-top: 2rem; padding: 1.5rem; border: 1px solid var(--rule); }
+.saved-list { margin: 0; padding: 0; list-style: none; }
+.saved-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1rem; align-items: center; padding: .55rem 0; border-bottom: 1px solid var(--rule); }
+.saved-list a { color: var(--teal-bright); overflow-wrap: anywhere; }
+.saved-list small { color: var(--ink-faint); font-family: var(--mono); }
+@media (max-width: 860px) { .share-panel { grid-template-columns: 1fr; } }

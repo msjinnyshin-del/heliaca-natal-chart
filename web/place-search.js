@@ -35,15 +35,16 @@ export function createPlaceState() {
   };
 }
 
-export function mountPlaceSearch({onChange}) {
-  const input = document.querySelector('#place');
-  const list = document.querySelector('#place-results');
-  const status = document.querySelector('#place-status');
-  const warning = document.querySelector('#place-warning');
-  const button = document.querySelector('#place-search-button');
-  const manual = document.querySelector('#manual-location-toggle');
-  const details = document.querySelector('#location-details');
-  const fields = ['latitude', 'longitude', 'timezone'].map(id => document.getElementById(id));
+export function mountPlaceSearch({onChange, prefix = ''}) {
+  const byId = id => document.getElementById(prefix + id);
+  const input = byId('place');
+  const list = byId('place-results');
+  const status = byId('place-status');
+  const warning = byId('place-warning');
+  const button = byId('place-search-button');
+  const manual = byId('manual-location-toggle');
+  const details = byId('location-details');
+  const fields = ['latitude', 'longitude', 'timezone'].map(id => byId(id));
   const state = createPlaceState();
   let timer, controller, serial = 0, results = [], active = -1;
 
@@ -75,7 +76,7 @@ export function mountPlaceSearch({onChange}) {
   function highlight(index) {
     active = index;
     [...list.children].forEach((item, i) => item.setAttribute('aria-selected', String(i === active)));
-    input.setAttribute('aria-activedescendant', `place-option-${active}`);
+    input.setAttribute('aria-activedescendant', `${prefix}place-option-${active}`);
     list.children[active]?.scrollIntoView({block:'nearest'});
   }
   async function search() {
@@ -96,7 +97,7 @@ export function mountPlaceSearch({onChange}) {
       results = data.results; list.replaceChildren();
       for (const [index, place] of results.entries()) {
         const item = document.createElement('li');
-        item.id = `place-option-${index}`; item.setAttribute('role','option'); item.setAttribute('aria-selected','false');
+        item.id = `${prefix}place-option-${index}`; item.setAttribute('role','option'); item.setAttribute('aria-selected','false');
         const label = document.createElement('strong'); label.textContent = place.label;
         const info = document.createElement('small'); info.textContent = `${place.latitude}, ${place.longitude} · ${place.timezone}`;
         item.append(label, info);

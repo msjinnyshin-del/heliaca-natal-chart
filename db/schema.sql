@@ -85,6 +85,15 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 );
 CREATE INDEX IF NOT EXISTS login_attempts_key ON login_attempts(key_hash, attempted_at);
 
+CREATE TABLE IF NOT EXISTS shares (
+    token TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    title TEXT,
+    payload TEXT NOT NULL,
+    delete_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 -- Default channels (only when the table is empty, like SQLite migration 2).
 INSERT INTO utm_channels (key, label_ko, utm_source, utm_medium, sort_order, created_at)
 SELECT v.key, v.label_ko, v.utm_source, v.utm_medium, v.sort_order,

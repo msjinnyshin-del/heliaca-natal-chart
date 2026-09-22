@@ -11,7 +11,11 @@ cd natal-chart   # 이 저장소 폴더
 .venv/bin/python server.py --port 8765
 ```
 
-브라우저: <http://127.0.0.1:8765>
+브라우저: <http://127.0.0.1:8765> · 시너스트리: <http://127.0.0.1:8765/synastry.html>
+
+### 시너스트리 (`/synastry.html`, `POST /api/synastry`)
+
+두 사람의 차트를 각각 기존 엔진으로 계산한 뒤 `natal/synastry.py`(규칙 `synastry-v2`)가 상호 어스펙트와 하우스 오버레이를 만든다. orb는 합·대립 6°, 스퀘어·트라인 5°, 섹스타일 4°, 퀸컹스 2°(해·달 +1°), Chiron·North Node·ASC·MC는 2°이며 ASC–ASC 같은 각도끼리는 제외한다. 강도(`strength`)는 표시 정렬용 가중치이며 판정에 쓰지 않는다. 입력은 저장하지 않지만, 사용자가 “저장하고 링크 만들기”를 누르면 `shares` 테이블에 입력이 저장되고 추측 불가능한 토큰 링크(`/synastry.html?s=<token>`)가 발급된다. 삭제 키는 만든 브라우저(localStorage)에만 있고 서버에는 해시로 저장된다. **Postgres 배포 시 `db/schema.sql`의 `shares` 테이블을 수동으로 적용해야 한다.**
 
 새 환경에서는 Python 3.9 이상과 아래 설치가 필요하다.
 

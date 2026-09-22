@@ -129,6 +129,9 @@ class ChartHandler(BaseHTTPRequestHandler):
         if route == "/api/health":
             self.send_json(200, {"status": "local_server_running"})
             return
+        if route.startswith("/api/share/"):
+            self.share_get(route[len("/api/share/"):])
+            return
         if route == "/api/places":
             from natal.places import PlaceSearchError, search_places
             try:
@@ -237,6 +240,15 @@ class ChartHandler(BaseHTTPRequestHandler):
         if self.is_admin_route():
             self.admin_post(route)
             return
+        if route == "/api/synastry":
+            self.synastry()
+            return
+        if route == "/api/share":
+            self.share_create()
+            return
+        if route.startswith("/api/share/") and route.endswith("/delete"):
+            self.share_delete(route[len("/api/share/"):-len("/delete")])
+            return
         if route != "/api/chart":
             self.error_json(404, "NOT_FOUND", "요청 경로를 찾을 수 없습니다.")
             return
@@ -267,6 +279,98 @@ class ChartHandler(BaseHTTPRequestHandler):
             return
         self.record(payload, client, result=result)
         self.send_json(200, result)
+
+    def synastry(self):
+        body = self.read_body()
+        if body is None:
+            return
+        try:
+            payload = self.parse_json_object(body[1])
+        except (ValueError, UnicodeError):
+            self.error_json(400, "INVALID_JSON", "올바른 JSON 객체를 입력해 주세요.")
+            return
+        # Synastry inputs are not stored; the client context is accepted and dropped.
+        payload.pop("client", None)
+        from natal.errors import ChartError
+        from natal.synastry import calculate_synastry
+        try:
+            result = calculate_synastry(payload)
+        except ChartError as error:
+            self.error_json(422, error.code, str(error), getattr(error, "details", None))
+            return
+        except Exception:
+            self.error_json(500, "CALCULATION_FAILED", "계산에 실패했습니다. 엔진과 데이터 설치 상태를 확인해 주세요.")
+            return
+        self.send_json(200, result)
+
+    def json_body(self):
+        body = self.read_body()
+        if body is None:
+            return None
+        try:
+            return self.parse_json_object(body[1])
+        except (ValueError, UnicodeError):
+            self.error_json(400, "INVALID_JSON", "올바른 JSON 객체를 입력해 주세요.")
+            return None
+
+    def share_create(self):
+        payload = self.json_body()
+        if payload is None:
+            return
+        from natal import shares, store
+        from natal.errors import ChartError
+        from natal.synastry import calculate_synastry
+        names = payload.get("names") if isinstance(payload.get("names"), dict) else {}
+        if payload.get("kind") != "synastry" or not isinstance(payload.get("input"), dict):
+            self.error_json(422, "INVALID_INPUT", "kind=synastry와 input 객체가 필요합니다.")
+            return
+        try:
+            calculate_synastry(payload["input"])  # only shareable if it calculates cleanly
+        except ChartError as error:
+            self.error_json(422, error.code, str(error), getattr(error, "details", None))
+            return
+        stored = {"names": {key: store.clean_name(names.get(key)) for key in ("a", "b")}, "input": payload["input"]}
+        try:
+            token, delete_key = shares.create_share("synastry", payload.get("title"), stored)
+        except Exception:
+            self.error_json(503, "SHARE_UNAVAILABLE", "공유 링크 저장소를 사용할 수 없습니다.")
+            return
+        self.send_json(201, {"token": token, "path": f"/synastry.html?s={token}", "delete_key": delete_key})
+
+    def share_get(self, token):
+        from natal import shares
+        from natal.errors import ChartError
+        from natal.synastry import calculate_synastry
+        try:
+            share = shares.get_share(token)
+        except Exception:
+            self.error_json(503, "SHARE_UNAVAILABLE", "공유 링크 저장소를 사용할 수 없습니다.")
+            return
+        if share is None:
+            self.error_json(404, "SHARE_NOT_FOUND", "공유 링크가 없거나 삭제되었습니다.")
+            return
+        try:
+            result = calculate_synastry(share["payload"]["input"])
+        except ChartError as error:
+            self.error_json(422, error.code, str(error), getattr(error, "details", None))
+            return
+        self.send_json(200, {"kind": share["kind"], "title": share["title"], "names": share["payload"]["names"],
+                             "created_at": share["created_at"], "result": result})
+
+    def share_delete(self, token):
+        payload = self.json_body()
+        if payload is None:
+            return
+        from natal import shares
+        try:
+            deleted = shares.delete_share(token, payload.get("delete_key"))
+        except Exception:
+            self.error_json(503, "SHARE_UNAVAILABLE", "공유 링크 저장소를 사용할 수 없습니다.")
+            return
+        if not deleted:
+            self.error_json(404, "SHARE_NOT_FOUND", "삭제할 링크가 없거나 삭제 키가 맞지 않습니다.")
+            return
+        self.send_json(200, {"deleted": True})
 
     @staticmethod
     def record(payload, client, result=None, error_code=None):

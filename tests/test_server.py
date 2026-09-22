@@ -74,6 +74,32 @@ class ServerTests(unittest.TestCase):
         self.assertIn("code", json.loads(raw)["error"])
         self.assertEqual(headers["Cache-Control"], "no-store")
 
+    def test_synastry_share_create_view_delete(self):
+        person = {"date": "1990-05-15", "time": "14:30", "timezone": "Asia/Seoul", "latitude": 37.5665, "longitude": 126.978,
+                  "place": "Seoul", "house_system": "P", "node_mode": "true"}
+        pair = {"person_a": person, "person_b": {**person, "date": "1992-11-03"}}
+        json_headers = {"Content-Type": "application/json"}
+        status, _, raw = self.request("POST", "/api/synastry", json.dumps(pair), json_headers)
+        self.assertEqual(status, 200)
+        self.assertIn("aspects", json.loads(raw))
+        status, _, raw = self.request("POST", "/api/share", json.dumps({"kind": "synastry", "title": "우리", "names": {"a": "진", "b": "왕"}, "input": pair}), json_headers)
+        self.assertEqual(status, 201)
+        created = json.loads(raw)
+        self.assertNotIn("1990", created["path"])  # only the token travels in the URL
+        status, _, raw = self.request("GET", f"/api/share/{created['token']}")
+        self.assertEqual(status, 200)
+        shared = json.loads(raw)
+        self.assertEqual((shared["title"], shared["names"]["a"]), ("우리", "진"))
+        self.assertEqual(shared["result"]["person_b"]["input"]["date"], "1992-11-03")
+        status, _, _ = self.request("POST", f"/api/share/{created['token']}/delete", json.dumps({"delete_key": "wrong"}), json_headers)
+        self.assertEqual(status, 404)
+        status, _, _ = self.request("POST", f"/api/share/{created['token']}/delete", json.dumps({"delete_key": created["delete_key"]}), json_headers)
+        self.assertEqual(status, 200)
+        status, _, _ = self.request("GET", f"/api/share/{created['token']}")
+        self.assertEqual(status, 404)
+        status, _, _ = self.request("POST", "/api/share", json.dumps({"kind": "synastry", "input": {"person_a": person}}), json_headers)
+        self.assertEqual(status, 422)
+
     def test_real_chart_uses_engine_not_fixed_response(self):
         payload = {"date": "1985-07-14", "time": "21:45:00", "timezone": "America/New_York", "latitude": 40.7128, "longitude": -74.006, "place": "reference", "house_system": "P", "node_mode": "true", "time_accuracy": "reported"}
         status, _, raw = self.request("POST", "/api/chart", json.dumps(payload), {"Content-Type": "application/json"})

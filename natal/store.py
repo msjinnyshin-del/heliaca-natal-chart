@@ -14,7 +14,7 @@ from .rules import SIGNS
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = ROOT / "data" / "admin.sqlite3"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 _INIT_LOCK = threading.Lock()
 _INITIALIZED = set()
 
@@ -119,6 +119,17 @@ MIGRATIONS = {
         attempted_at REAL NOT NULL
     );
     CREATE INDEX login_attempts_key ON login_attempts(key_hash, attempted_at);
+    """,
+    # User-created private share links; the token is unguessable and the delete key is stored hashed.
+    4: """
+    CREATE TABLE shares (
+        token TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        title TEXT,
+        payload TEXT NOT NULL,
+        delete_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
     """,
 }
 

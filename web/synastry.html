@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Heliaca 시너스트리 — 두 사람의 네이털 차트를 겹쳐 행성 간 어스펙트와 하우스 오버레이를 계산합니다">
+  <meta name="theme-color" content="#020606">
+  <title>Heliaca · 시너스트리 차트</title>
+  <link rel="icon" href="/assets/heliaca-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#synastry-form">출생 정보 입력으로 건너뛰기</a>
+  <header class="masthead">
+    <a class="brand-block" href="/" aria-label="Heliaca 네이털 차트로">
+      <img class="brand-logo" src="/assets/heliaca-logo.svg" alt="Heliaca">
+    </a>
+    <nav class="mast-nav" aria-label="도구"><a href="/">네이털 차트</a><a href="/synastry.html" aria-current="page">시너스트리</a></nav>
+  </header>
+
+  <main id="top">
+    <section class="input-station" aria-labelledby="input-title">
+      <div class="input-heading">
+        <div>
+          <p class="plate-number">TOOL 02 / SYNASTRY</p>
+          <h2 id="input-title">두 사람의 하늘을 겹쳐 보기</h2>
+        </div>
+        <p class="scope-note">두 네이털 차트를 한 바퀴에 겹쳐, 한 사람의 행성이 다른 사람의 행성·하우스와 맺는 모든 관계를 계산합니다. 궁합 점수가 아니라 두 사람이 만나는 방식의 지도입니다.</p>
+      </div>
+
+      <form id="synastry-form" novalidate>
+        <div class="synastry-people">
+          <div id="person-a-slot" data-prefix="a-" data-label="나 · PERSON A"></div>
+          <div id="person-b-slot" data-prefix="b-" data-label="상대 · PERSON B"></div>
+        </div>
+        <div class="fields-grid synastry-shared">
+          <label class="field field-house">
+            <span>House system <b>두 사람 공통</b></span>
+            <select id="house-system" name="house_system">
+              <option value="P">Placidus · P</option><option value="W">Whole Sign · W</option><option value="E">Equal · E</option><option value="K">Koch · K</option><option value="O">Porphyry · O</option>
+            </select>
+          </label>
+          <fieldset class="field radio-field"><legend>North Node</legend><label><input type="radio" name="node_mode" value="true" checked> True</label><label><input type="radio" name="node_mode" value="mean"> Mean</label></fieldset>
+        </div>
+        <div class="form-footer">
+          <div class="form-notes">
+            <p><strong>두 사람 모두 1900년 이후의 알려진 출생 시각이 필요합니다.</strong> 출생 시각이 틀리면 ASC·MC와 하우스 오버레이가 달라집니다.</p>
+            <p class="storage-notice">시너스트리 입력은 ‘저장하고 링크 만들기’를 누르기 전까지 서버에 저장하지 않습니다. 출생지 검색 시 도시 검색어만 외부 서비스(Open-Meteo · GeoNames)로 전송됩니다.</p>
+          </div>
+          <button id="calculate-button" class="calculate-button" type="submit"><span>시너스트리 그리기</span><span aria-hidden="true">↗</span></button>
+        </div>
+      </form>
+    </section>
+
+    <div id="shared-banner" class="shared-banner" hidden></div>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+
+    <section id="synastry-workbench" class="workbench" aria-labelledby="result-title" aria-busy="false">
+      <div class="result-heading">
+        <div class="result-title-block">
+          <p class="plate-number">02 / OVERLAID SKY</p>
+          <h2 id="result-title">두 차트가 이곳에 겹쳐집니다</h2>
+          <p id="result-subtitle" class="result-subtitle">두 사람의 출생 정보를 입력하고 시너스트리 그리기를 눌러주세요.</p>
+        </div>
+        <div class="result-tools"><div class="result-actions">
+          <span id="freshness-badge" class="status-badge is-waiting">입력 대기</span>
+          <button id="copy-markdown" class="copy-button" type="button" disabled>해석용 MD 복사</button>
+        </div></div>
+      </div>
+
+      <div class="primary-grid">
+        <figure class="chart-panel">
+          <div id="chart-stage" class="chart-stage"><div class="chart-placeholder" aria-hidden="true"><span>✦</span></div></div>
+          <figcaption>안쪽: <span class="syn-key-a">A</span>의 하우스와 행성(A의 ASC가 왼쪽) · 바깥 띠: <span class="syn-key-b">B</span>의 행성 · 중앙선: 두 사람 사이 어스펙트</figcaption>
+        </figure>
+        <section class="positions-panel" aria-labelledby="positions-title">
+          <div class="section-heading"><div><p class="plate-number">SIDE BY SIDE</p><h3 id="positions-title">두 사람의 배치</h3></div></div>
+          <div class="table-scroll"><table><thead><tr><th scope="col">대상</th><th scope="col" id="col-a">A</th><th scope="col" id="col-b">B</th></tr></thead><tbody id="positions-body"><tr><td colspan="3" class="empty-cell">계산 대기 중</td></tr></tbody></table></div>
+        </section>
+      </div>
+
+      <section class="detail-deck" aria-label="시너스트리 세부 정보">
+        <div class="tab-list" role="tablist" aria-label="결과 보기">
+          <button id="tab-aspects" role="tab" aria-selected="true" aria-controls="panel-aspects">상호 어스펙트</button>
+          <button id="tab-overlays" role="tab" aria-selected="false" aria-controls="panel-overlays" tabindex="-1">하우스 오버레이</button>
+          <button id="tab-evidence" role="tab" aria-selected="false" aria-controls="panel-evidence" tabindex="-1">계산 근거</button>
+        </div>
+        <div id="panel-aspects" role="tabpanel" aria-labelledby="tab-aspects"><div id="aspect-register" class="detail-content empty-state">계산 후 두 차트 사이 어스펙트가 강도 순으로 표시됩니다.</div></div>
+        <div id="panel-overlays" role="tabpanel" aria-labelledby="tab-overlays" hidden><div id="overlay-register" class="detail-content empty-state">계산 후 서로의 하우스에 놓인 행성이 표시됩니다.</div></div>
+        <div id="panel-evidence" role="tabpanel" aria-labelledby="tab-evidence" hidden><div id="evidence-register" class="detail-content empty-state">orb 규칙과 두 차트의 UTC·시간대가 표시됩니다.</div></div>
+      </section>
+
+      <section id="share-panel" class="share-panel" aria-labelledby="share-title" hidden>
+        <div>
+          <p class="plate-number">KEEP IT CLOSE</p>
+          <h3 id="share-title">저장하고 비공개 링크로 공유하기</h3>
+          <p class="share-note">링크에는 추측할 수 없는 토큰만 담기며, 링크를 가진 사람은 두 사람의 이름·출생 정보와 차트를 볼 수 있습니다. 만든 브라우저에서 언제든 삭제할 수 있습니다.</p>
+        </div>
+        <div class="share-controls">
+          <label class="field"><span>이름 붙이기</span><input id="share-title-input" maxlength="80" placeholder="예: 우리 둘"></label>
+          <button id="share-create" class="copy-button" type="button">저장하고 링크 만들기</button>
+          <div id="share-result" class="share-result" hidden>
+            <input id="share-url" readonly aria-label="공유 링크">
+            <button id="share-copy" class="text-button" type="button">복사</button>
+            <button id="share-delete" class="text-button" type="button">링크 삭제</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="saved-panel" class="saved-panel" aria-labelledby="saved-title" hidden>
+      <p class="plate-number">SAVED IN THIS BROWSER</p>
+      <h3 id="saved-title">저장한 시너스트리</h3>
+      <ul id="saved-list" class="saved-list"></ul>
+    </section>
+  </main>
+
+  <footer><span class="footer-brand"><img src="/assets/heliaca-mark.svg" alt="">Heliaca · 당신의 시작을 비추는 별의 지도.</span><span>공유 링크를 만든 경우에만 입력이 저장되며, 만든 브라우저에서 삭제할 수 있습니다.</span></footer>
+  <script type="module" src="/synastry.js"></script>
+</body>
+</html>
