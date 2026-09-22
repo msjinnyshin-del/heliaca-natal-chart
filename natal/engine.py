@@ -189,4 +189,6 @@ def calculate_chart(payload):
                          "not_evaluated": ["dignities", "patterns", "applying/separating", "interpretation", "unknown/approximate time"]},
             "warnings": ["좌표와 IANA 시간대의 지리적 일치는 사용자가 확인해야 합니다.", "최근접 초 표시값과 원시 사인/하우스 판정은 구분됩니다.",
                          "S는 속도 임계값 기반 근정지 표시이며 정확한 station 시각을 계산했다는 뜻이 아닙니다.",
-                         "스피릿은 정의한 Lot of Spirit이며 참조 이미지의 다이아몬드 기호와 동일하다고 확정하지 않습니다."]}
+                         "스피릿은 정의한 Lot of Spirit이며 참조 이미지의 다이아몬드 기호와 동일하다고 확정하지 않습니다."]
+                        + ([f"1970년 이전 출생: IANA 역사 시간대 기록의 UTC{offset}를 적용했습니다. 당시 서머타임·표준시 변경이 출생 기록과 다를 수 있으니 확인하세요."]
+                           if utc.year < 1970 or payload["date"] < "1970" else [])}

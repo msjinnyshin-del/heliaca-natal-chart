@@ -249,8 +249,17 @@ class TimeAndFailureTests(unittest.TestCase):
         for source in invalid_locations:
             self.assert_code({**REFERENCE, "location_source": source}, "INVALID_INPUT")
         self.assert_code({**REFERENCE, "date": "1899-12-31"}, "UNSUPPORTED_DATE")
-        self.assert_code({**REFERENCE, "date": "1900-01-01"}, "TIMEZONE_NEEDS_REVIEW")
-        self.assert_code({**REFERENCE, "date": "1969-12-31"}, "TIMEZONE_NEEDS_REVIEW")
+        self.assert_code({**REFERENCE, "date": "1899-12-31"}, "UNSUPPORTED_DATE")
+        from natal.engine import calculate_chart
+        for date in ("1900-01-01", "1969-12-31"):
+            chart = calculate_chart({**REFERENCE, "date": date})
+            self.assertEqual(chart["calculation_status"], "success")
+            self.assertTrue(any("1970년 이전" in warning for warning in chart["warnings"]))
+        # Korean historic standard time (UTC+8:30, 1954-1961) and summer time come from IANA history.
+        seoul = {**REFERENCE, "timezone": "Asia/Seoul", "latitude": 37.5665, "longitude": 126.978}
+        self.assertEqual(calculate_chart({**seoul, "date": "1958-01-01", "time": "12:00"})["normalized"]["offset"], "+08:30")
+        self.assertEqual(calculate_chart({**seoul, "date": "1960-07-01", "time": "12:00"})["normalized"]["offset"], "+09:30")
+        self.assertFalse(any("1970년 이전" in warning for warning in calculate_chart(REFERENCE)["warnings"]))
         future = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
         self.assert_code({**REFERENCE, "date": future}, "UNSUPPORTED_DATE")
 

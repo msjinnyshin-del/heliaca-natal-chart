@@ -38,8 +38,6 @@ def resolve_time(payload):
         raise ChartError("INVALID_INPUT", "유효하지 않은 날짜 또는 시각입니다. 윤초 입력은 지원하지 않습니다.") from None
     if local_date.year < 1900:
         raise ChartError("UNSUPPORTED_DATE", "1900년 이전 또는 미래 출생일은 지원하지 않습니다.")
-    if local_date.year < 1970:
-        raise ChartError("TIMEZONE_NEEDS_REVIEW", "1970년 이전의 역사 시간대 자료는 별도 검증이 필요합니다. 현재 확정 계산 범위는 1970년부터 오늘까지입니다.")
     if tzdata.__version__ != "2025.2" or tzdata.IANA_VERSION != "2025b":
         raise ChartError("TIMEZONE_NEEDS_REVIEW", "고정된 tzdata 2025.2 (IANA 2025b)가 필요합니다.")
     zone_name = payload.get("timezone")
