@@ -70,3 +70,19 @@ test('rejects partial, blocked or incomplete result instead of inventing chart d
   invalid.bodies[0].longitude = NaN;
   assert.throws(() => exporter.buildInterpretationMarkdown(invalid), /유효/);
 });
+
+test('embeds the interpretation design: priorities, rulers, cues, evidence format and self-check', () => {
+  const run2 = spawnSync('.venv/bin/python', ['-c', `import json
+from natal.engine import calculate_chart
+print(json.dumps(calculate_chart(dict(date='1972-08-27',time='22:20:00',timezone='America/New_York',latitude=29.65163,longitude=-82.32483,place='Gainesville',house_system='P',node_mode='true',time_accuracy='reported'))))`], { encoding: 'utf8', cwd: new URL('..', import.meta.url) });
+  assert.equal(run2.status, 0, run2.stderr);
+  const md = exporter.buildInterpretationMarkdown(JSON.parse(run2.stdout));
+  for (const re of [/## 3\. 해석 우선순위/, /## 4\. 참조 지배성표/, /\[근거: /, /## 10\. 제출 전 자기점검/]) assert.match(md, re);
+  assert.match(md, /ASC 양 → 차트 룰러: 현대 화성/);
+  assert.match(md, /1\. .*Moon.*사각.*Venus.* 오브 0\.11°/);
+  assert.match(md, /ASC: 양 27°02′27″ — 사인 경계 3° 이내/);
+  assert.match(md, /5하우스 \(\d\): .*← 집중/);
+  assert.match(md, /역행·근정지\*\*: .*\(S\)/);
+  assert.ok(md.indexOf('## 10. 제출 전 자기점검') < md.indexOf('## 입력 정보'));
+  assert.doesNotMatch(md, /undefined|NaN|\[object Object\]/);
+});
