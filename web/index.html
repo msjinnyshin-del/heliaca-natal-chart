@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Heliaca — 당신이 태어난 순간의 하늘을 정밀하게 계산하는 네이털 차트">
   <meta name="theme-color" content="#020606">
-  <title>Heliaca · 당신의 시작을 비추는 별의 지도</title>
+  <title>Heliaca · 네이털 차트 계산기</title>
   <link rel="icon" href="/assets/heliaca-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
 </head>
@@ -31,7 +31,7 @@
         <img class="hero-mark" src="/assets/heliaca-mark.svg" alt="" aria-hidden="true">
         <p class="eyebrow">YOUR SKY, PRECISELY MAPPED</p>
         <h1 id="hero-title">태어난 순간의 빛으로,<br><em>나를 읽는 새로운 시선.</em></h1>
-        <p class="hero-copy">당신의 시작을 비추는 별의 지도.</p>
+        <p class="hero-copy">생년월일·시각·출생지로 계산하는 정밀 네이털 차트 계산기.<br>당신의 시작을 비추는 별의 지도.</p>
         <a class="hero-cta" href="#chart-form"><span>내 차트 계산하기</span><span aria-hidden="true">↘</span></a>
       </div>
       <div class="hero-coordinate hero-coordinate-left" aria-hidden="true">TROPICAL <i></i> GEOCENTRIC</div>
@@ -51,7 +51,16 @@
       <form id="chart-form" novalidate>
         <div class="fields-grid">
           <label class="field field-name"><span>이름 <em>선택</em></span><input id="name" name="name" autocomplete="name" placeholder="차트 제목에 표시할 이름 · 닉네임"></label>
-          <label class="field field-date"><span>생년월일 <b>양력 · Gregorian</b></span><input id="date" name="date" type="date" required></label>
+          <div class="field field-date">
+            <span><label for="date">생년월일</label> <b id="date-calendar-hint">양력 · Gregorian</b></span>
+            <div class="calendar-toggle" role="radiogroup" aria-label="달력 종류">
+              <label><input type="radio" name="calendar" value="gregorian" checked> 양력</label>
+              <label><input type="radio" name="calendar" value="lunar"> 음력</label>
+              <label class="lunar-leap" hidden><input type="checkbox" name="lunar_leap"> 윤달</label>
+            </div>
+            <input id="date" name="date" type="date" required>
+            <small id="lunar-note" class="lunar-note" hidden>한국 음력 기준으로 양력 날짜로 변환해 계산합니다.</small>
+          </div>
           <label class="field field-time"><span>태어난 시각 <b>현지 시각</b></span><input id="time" name="time" type="time" step="60" required></label>
 
           <div class="place-field">

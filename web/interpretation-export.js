@@ -85,7 +85,7 @@ export function buildInterpretationMarkdown(chart, { name = '' } = {}) {
     '> 개인정보가 포함된 문서입니다. 외부 서비스에 붙여넣기 전에 내용을 확인하세요. 시각은 사용자가 보고한 값이며 출생 기록을 검증했다는 뜻이 아닙니다.',
     table(['항목', '값'], [
       ...(name.trim() ? [['이름 (사용자 입력)', JSON.stringify(name.trim())]] : []),
-      ['생년월일 / 현지 시각', `${input.date} ${input.time}`],
+      ['생년월일 / 현지 시각', `${input.calendar === 'lunar' ? `음력 ${input.date}${input.lunar_leap ? '(윤달)' : ''} (양력 ${chart.normalized?.solar_date ?? '—'})` : input.date} ${input.time}`],
       ['장소 (사용자 입력)', JSON.stringify(input.place ?? '')],
       ['위도 / 경도 (북·동 양수)', `${n.latitude} / ${n.longitude}`],
       ...locationSourceRows(input.location_source),

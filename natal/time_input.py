@@ -21,6 +21,38 @@ def format_offset(delta):
     return f"{sign}{hours:02d}:{minutes:02d}" + (f":{seconds:02d}" if seconds else "")
 
 
+def convert_calendar(payload):
+    """Return (payload with a Gregorian date, conversion record or None).
+
+    Lunar dates use the Korean (KASI-based) calendar, whose month starts follow
+    Korean time; they can differ by a day from the Chinese calendar.
+    """
+    calendar = payload.get("calendar", "gregorian")
+    if calendar == "gregorian":
+        if payload.get("lunar_leap") not in (None, False):
+            raise ChartError("INVALID_INPUT", "윤달은 음력 입력에서만 선택할 수 있습니다.")
+        return payload, None
+    if calendar != "lunar":
+        raise ChartError("INVALID_INPUT", "양력(gregorian) 또는 음력(lunar)만 지원합니다.")
+    date_text, leap = payload.get("date"), payload.get("lunar_leap", False)
+    if type(leap) is not bool:
+        raise ChartError("INVALID_INPUT", "윤달 여부는 true 또는 false여야 합니다.")
+    match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", date_text) if isinstance(date_text, str) else None
+    if not match:
+        raise ChartError("INVALID_INPUT", "음력 생년월일은 YYYY-MM-DD 형식이어야 합니다.")
+    year, month, day = (int(part) for part in match.groups())
+    if not 1900 <= year <= 2050:
+        raise ChartError("UNSUPPORTED_DATE", "음력은 1900–2050년만 변환할 수 있습니다.")
+    from korean_lunar_calendar import KoreanLunarCalendar
+    converter = KoreanLunarCalendar()  # stateful: one instance per request
+    if not converter.setLunarDate(year, month, day, leap):
+        raise ChartError("INVALID_INPUT", "존재하지 않는 음력 날짜입니다. 월·일과 윤달 여부를 확인하세요.")
+    solar = converter.SolarIsoFormat()
+    record = {"calendar": "lunar", "lunar_date": date_text, "lunar_leap": leap, "solar_date": solar,
+              "converter": "korean-lunar-calendar 0.4.0 (Korean/KASI lunar calendar)"}
+    return {**payload, "calendar": "gregorian", "date": solar, "lunar_leap": None}, record
+
+
 def resolve_time(payload):
     if payload.get("calendar", "gregorian") != "gregorian":
         raise ChartError("INVALID_INPUT", "Gregorian 양력만 지원합니다.")

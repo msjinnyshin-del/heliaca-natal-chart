@@ -11,7 +11,7 @@ import swisseph as swe
 
 from .errors import ChartError
 from .rules import aspects, house_for, lots, normalize_aspect_profile, position
-from .time_input import resolve_time
+from .time_input import convert_calendar, resolve_time
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data" / "ephe"
@@ -110,7 +110,8 @@ def calculate_chart(payload):
     if house_system not in ("P", "W", "E", "K", "O") or node_mode not in ("true", "mean"):
         raise ChartError("INVALID_INPUT", "지원하지 않는 하우스 또는 Node 설정입니다.")
     aspect_profile = normalize_aspect_profile(payload.get("aspect_profile"))
-    utc, offset, zone, resolution = resolve_time(payload)
+    solar_payload, calendar_conversion = convert_calendar(payload)
+    utc, offset, zone, resolution = resolve_time(solar_payload)
     location_source = normalize_location_source(payload, latitude, longitude, zone)
     with ENGINE_LOCK:
         manifest = validate_data()
@@ -166,7 +167,7 @@ def calculate_chart(payload):
             item = next(item for item in manifest["files"] if item["name"] == filename)
             used_data.append({**item, "start_jd": start, "end_jd": end, "denum": denum})
     # Preserve only contract fields; an optional name is never needed by the engine.
-    original = {key: payload[key] for key in ("date", "time", "timezone", "latitude", "longitude", "place", "house_system", "node_mode", "time_accuracy", "fold") if key in payload}
+    original = {key: payload[key] for key in ("date", "time", "timezone", "latitude", "longitude", "place", "house_system", "node_mode", "time_accuracy", "fold", "calendar", "lunar_leap") if key in payload}
     original["aspect_profile"] = aspect_profile
     original["location_source"] = location_source
     settings = {"house_system": house_system, "node_mode": node_mode, "lilith_mode": "mean", "zodiac": "tropical", "rounding": "nearest_second",
@@ -176,7 +177,8 @@ def calculate_chart(payload):
                                              "location_source": location_source, "manifest": manifest}, sort_keys=True).encode()).hexdigest()
     return {"status": "calculated", "calculation_status": "success", "input": original,
             "normalized": {"utc": utc.isoformat().replace("+00:00", "Z"), "offset": offset, "timezone": zone, "latitude": latitude, "longitude": longitude,
-                           "jd_tt": jd_tt, "jd_ut1": jd_ut1, "time_resolution": resolution, "time_accuracy": "reported"},
+                           "jd_tt": jd_tt, "jd_ut1": jd_ut1, "time_resolution": resolution, "time_accuracy": "reported",
+                           "solar_date": solar_payload["date"], "calendar_conversion": calendar_conversion},
             "settings": settings, "bodies": bodies, "angles": angles,
             "houses": [{"number": i + 1, **position(lon)} for i, lon in enumerate(cusps)], "aspects": aspects(bodies, angles, aspect_profile), "sect": sect,
             "metadata": {"engine": manifest["engine"], "engine_version": swe.version, "binding_version": version("pyswisseph"), "tzdb": manifest["tzdb"],
@@ -191,4 +193,4 @@ def calculate_chart(payload):
                          "S는 속도 임계값 기반 근정지 표시이며 정확한 station 시각을 계산했다는 뜻이 아닙니다.",
                          "스피릿은 정의한 Lot of Spirit이며 참조 이미지의 다이아몬드 기호와 동일하다고 확정하지 않습니다."]
                         + ([f"1970년 이전 출생: IANA 역사 시간대 기록의 UTC{offset}를 적용했습니다. 당시 서머타임·표준시 변경이 출생 기록과 다를 수 있으니 확인하세요."]
-                           if utc.year < 1970 or payload["date"] < "1970" else [])}
+                           if solar_payload["date"] < "1970" else [])}

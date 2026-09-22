@@ -59,9 +59,36 @@ function byName(name) {
   return form.elements.namedItem(name);
 }
 
+function selectedCalendar() {
+  return form.querySelector('input[name="calendar"]:checked')?.value === 'lunar' ? 'lunar' : 'gregorian';
+}
+
+function syncCalendarControls() {
+  const lunar = selectedCalendar() === 'lunar';
+  const dateInput = byName('date');
+  const value = dateInput.value;
+  // Lunar months can have day 30 in any month (e.g. 2월 30일), which type=date rejects.
+  dateInput.type = lunar ? 'text' : 'date';
+  dateInput.inputMode = lunar ? 'numeric' : '';
+  dateInput.placeholder = lunar ? 'YYYY-MM-DD (음력)' : '';
+  dateInput.pattern = lunar ? '\\d{4}-\\d{2}-\\d{2}' : '';
+  dateInput.value = value;
+  form.querySelector('.lunar-leap').hidden = !lunar;
+  document.querySelector('#lunar-note').hidden = !lunar;
+  document.querySelector('#date-calendar-hint').textContent = lunar ? '음력 · Korean lunar' : '양력 · Gregorian';
+  if (!lunar) byName('lunar_leap').checked = false;
+}
+
+for (const radio of form.querySelectorAll('input[name="calendar"]')) {
+  radio.addEventListener('change', () => { syncCalendarControls(); invalidateResult(); });
+}
+
 function getPayload() {
+  const calendar = selectedCalendar();
   return requestState.withFold({
-    date: byName('date').value,
+    date: byName('date').value.trim(),
+    calendar,
+    ...(calendar === 'lunar' ? { lunar_leap: byName('lunar_leap').checked } : {}),
     time: byName('time').value,
     timezone: byName('timezone').value.trim(),
     latitude: byName('latitude').value === '' ? null : Number(byName('latitude').value),
@@ -207,7 +234,7 @@ function renderResult(result, payload) {
 
   const displayName = byName('name').value.trim();
   resultTitle.textContent = displayName ? `${displayName}의 네이털 차트` : '네이털 차트';
-  resultSubtitle.textContent = `${payload.date} ${payload.time} · ${payload.place} · ${result.settings?.house_system || payload.house_system} / ${result.settings?.node_mode || payload.node_mode} node`;
+  resultSubtitle.textContent = `${payload.calendar === 'lunar' ? `음력 ${payload.date}${payload.lunar_leap ? '(윤달)' : ''} → 양력 ${result.normalized?.solar_date || '—'}` : payload.date} ${payload.time} · ${payload.place} · ${result.settings?.house_system || payload.house_system} / ${result.settings?.node_mode || payload.node_mode} node`;
   workbench.setAttribute('aria-busy', 'false');
   setExportAvailability(result.status === 'calculated' && result.calculation_status === 'success');
   setBadge(result.status === 'partial' ? '부분 결과' : '현재 입력 결과', result.status === 'partial' ? 'stale' : '');

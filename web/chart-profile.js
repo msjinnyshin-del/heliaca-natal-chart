@@ -27,7 +27,7 @@ export function buildWheelMetadata(result) {
   const metadata = result.metadata || {};
   const house = HOUSE_NAMES[settings.house_system] || settings.house_system || '—';
   return [
-    `${input.date || '—'} ${input.time || '—'} ${normalized.offset || ''} · UTC ${normalized.utc || '—'}`,
+    `${input.calendar === 'lunar' ? `음력 ${input.date}${input.lunar_leap ? '(윤)' : ''} = 양력 ${normalized.solar_date || '—'}` : (input.date || '—')} ${input.time || '—'} ${normalized.offset || ''} · UTC ${normalized.utc || '—'}`,
     `${coordinate(normalized.latitude, 'N', 'S')}  ${coordinate(normalized.longitude, 'E', 'W')} · ${input.place || ''}`,
     `${String(settings.zodiac || 'tropical').toUpperCase()} · ${house} · ${result.sect || '—'} · ${settings.aspect_rule || '—'}`,
     `${metadata.engine || 'Swiss Ephemeris'} ${metadata.engine_version || ''} · TZ ${normalized.timezone || '—'}`,

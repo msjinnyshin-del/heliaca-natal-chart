@@ -357,3 +357,13 @@ footer { display: flex; align-items: center; justify-content: space-between; gap
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
+
+/* Solar / lunar birth date toggle */
+.calendar-toggle { display: flex; flex-wrap: wrap; gap: .35rem 1rem; margin: .1rem 0 .15rem; color: var(--ink-soft); font-size: .8rem; }
+.calendar-toggle label { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer; }
+.calendar-toggle label[hidden] { display: none; }
+.field-date .field-label-row label { cursor: pointer; }
+.lunar-note { color: var(--ink-soft); font-size: .72rem; line-height: 1.5; }
+.lunar-note[hidden] { display: none; }
+.calendar-toggle label { white-space: nowrap; }
+.field .calendar-toggle input { width: auto; flex: none; margin: 0; padding: 0; border: 0; box-shadow: none; accent-color: var(--teal); }

@@ -228,7 +228,7 @@ class TimeAndFailureTests(unittest.TestCase):
                    {"time": "12:00Z"}, {"time_accuracy": "unknown"}, {"time_accuracy": "approximate"},
                    {"latitude": float("nan")}, {"latitude": float("inf")}, {"longitude": -181}, {"latitude": 91},
                    {"latitude": True}, {"latitude": 10 ** 400}, {"latitude": "29"}, {"timezone": "../UTC"}, {"timezone": "/etc/passwd"},
-                   {"timezone": "Madeup/Zone"}, {"node_mode": "wrong"}, {"house_system": "wrong"}, {"calendar": "lunar"}]
+                   {"timezone": "Madeup/Zone"}, {"node_mode": "wrong"}, {"house_system": "wrong"}, {"calendar": "chinese"}, {"calendar": "lunar", "date": "1958-02-31"}, {"lunar_leap": True}]
         for change in invalid:
             with self.subTest(change=change):
                 self.assert_code({**REFERENCE, **change}, "INVALID_INPUT")
@@ -365,3 +365,35 @@ class RuleBoundaries(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LunarCalendarTests(unittest.TestCase):
+    def test_korean_lunar_dates_convert_before_calculation(self):
+        from natal.engine import calculate_chart
+        seoul = {"time": "09:30", "timezone": "Asia/Seoul", "latitude": 37.5665, "longitude": 126.978}
+        # 1958 lunar new year: new moon 1958-02-18 15:38 UTC falls on Feb 19 in Korea (Feb 18 in China).
+        chart = calculate_chart({**seoul, "calendar": "lunar", "date": "1958-01-01"})
+        self.assertEqual(chart["normalized"]["solar_date"], "1958-02-19")
+        self.assertEqual(chart["input"]["date"], "1958-01-01")
+        self.assertEqual(chart["input"]["calendar"], "lunar")
+        self.assertEqual(chart["normalized"]["calendar_conversion"]["lunar_leap"], False)
+        solar = calculate_chart({**seoul, "date": "1958-02-19"})
+        self.assertEqual(chart["normalized"]["utc"], solar["normalized"]["utc"])
+        self.assertIsNone(solar["normalized"]["calendar_conversion"])
+        # 2023 had a leap 2nd month; leap and regular months map to different solar dates.
+        leap = calculate_chart({**seoul, "calendar": "lunar", "date": "2023-02-15", "lunar_leap": True})
+        regular = calculate_chart({**seoul, "calendar": "lunar", "date": "2023-02-15"})
+        self.assertEqual(leap["normalized"]["solar_date"], "2023-04-05")
+        self.assertEqual(regular["normalized"]["solar_date"], "2023-03-06")
+
+    def test_invalid_lunar_dates_are_rejected(self):
+        from natal.engine import calculate_chart
+        from natal.errors import ChartError
+        base = {"time": "09:30", "timezone": "Asia/Seoul", "latitude": 37.5665, "longitude": 126.978, "calendar": "lunar"}
+        for extra, code in (({"date": "2023-03-15", "lunar_leap": True}, "INVALID_INPUT"),
+                            ({"date": "1958-13-01"}, "INVALID_INPUT"),
+                            ({"date": "1899-12-01"}, "UNSUPPORTED_DATE"),
+                            ({"date": "1958-01-01", "lunar_leap": "yes"}, "INVALID_INPUT")):
+            with self.assertRaises(ChartError) as caught:
+                calculate_chart({**base, **extra})
+            self.assertEqual(caught.exception.code, code)
