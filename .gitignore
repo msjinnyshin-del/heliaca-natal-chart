@@ -17,3 +17,4 @@ data/admin.sqlite3*
 .claude/
 skills-lock.json
 ADMIN_CREDENTIALS.txt
+design/
