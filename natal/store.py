@@ -337,17 +337,24 @@ def clean_client(client):
 def summarize(result):
     bodies = {item["id"]: item for item in result.get("bodies", [])}
     angles = {item["id"]: item for item in result.get("angles", [])}
+    accuracy = (result.get("normalized") or {}).get("time_accuracy", "reported")
+    unknown = accuracy == "unknown"
+
+    def certain(item):
+        # Unknown birth time: a sign that changes during the day is not a fact about this person.
+        return item and (not unknown or (item.get("time_sensitivity") or {}).get("sign_stable") is True)
 
     def sign(item):
-        return SIGNS[item["sign_index"]] if item and isinstance(item.get("sign_index"), int) else None
+        return SIGNS[item["sign_index"]] if certain(item) and isinstance(item.get("sign_index"), int) else None
 
     return {
         "sun": sign(bodies.get("Sun")), "moon": sign(bodies.get("Moon")), "asc": sign(angles.get("ASC")),
-        "sun_position": (bodies.get("Sun") or {}).get("position"),
-        "moon_position": (bodies.get("Moon") or {}).get("position"),
+        "sun_position": None if unknown else (bodies.get("Sun") or {}).get("position"),
+        "moon_position": None if unknown else (bodies.get("Moon") or {}).get("position"),
         "asc_position": (angles.get("ASC") or {}).get("position"),
         "sect": result.get("sect"), "calculation_status": result.get("calculation_status"),
-        "utc": (result.get("normalized") or {}).get("utc"),
+        "time_accuracy": accuracy,
+        "utc": None if unknown else (result.get("normalized") or {}).get("utc"),
         "fingerprint": (result.get("metadata") or {}).get("input_fingerprint"),
     }
 

@@ -11,7 +11,7 @@ import {
   spreadLabelLongitudes,
 } from '../web/geometry.js';
 import { createRequestState, requestFingerprint } from '../web/request-state.js';
-import { buildWheelMetadata, formatWheelPosition, motionMarker } from '../web/chart-profile.js';
+import { aspectTimingLabel, buildWheelMetadata, formatWheelPosition, isUnknownTime, motionMarker, sensitivityNote, wheelAspects } from '../web/chart-profile.js';
 
 test('norm wraps longitudes into [0, 360)', () => {
   assert.equal(norm(360), 0);
@@ -97,4 +97,65 @@ test('wheel metadata exposes the exact input, normalized time and calculation pr
   });
   assert.match(lines[0], /1985-07-14 21:45:00.*UTC 1985-07-15T01:45:00Z/);
   assert.match(lines.join(' '), /40\.712800.*−74\.006000.*night · major-v2/);
+});
+
+const UNKNOWN_RESULT = {
+  input: { date: '1990-05-01', place: '서울', time_accuracy: 'unknown' },
+  normalized: { time_accuracy: 'unknown', representative_local_time: '12:00:00', utc: '1990-05-01T03:00:00Z', offset: '+09:00',
+    latitude: 37.5665, longitude: 126.978, timezone: 'Asia/Seoul' },
+  settings: { zodiac: 'tropical', house_system: 'P', aspect_rule: 'major-v2' },
+  sect: null, metadata: { engine: 'Swiss Ephemeris', engine_version: '2.10.03' },
+  aspects: [
+    { a: 'Sun', b: 'Mercury', name: 'Conjunction', stability: 'stable',
+      windows: [{ start_local: '1990-05-01T00:00:00', end_local: '1990-05-02T00:00:00' }] },
+    { a: 'Sun', b: 'Moon', name: 'Square', stability: 'partial',
+      windows: [{ start_local: '1990-05-01T13:42:10', end_local: '1990-05-02T00:00:00' }] },
+    { a: 'Moon', b: 'Venus', name: 'Trine', stability: 'partial',
+      windows: [{ start_local: '1990-05-01T00:00:00', end_local: '1990-05-01T03:05:00' },
+                { start_local: '1990-05-01T20:00:00', end_local: '1990-05-01T21:30:59' }] },
+  ],
+};
+
+test('unknown birth time is labelled on the wheel and never shows houses or sect as values', () => {
+  assert.equal(isUnknownTime(UNKNOWN_RESULT), true);
+  assert.equal(isUnknownTime({ normalized: { time_accuracy: 'reported' } }), false);
+  const lines = buildWheelMetadata(UNKNOWN_RESULT);
+  assert.match(lines[0], /1990-05-01 생시 미상 \(정오 12:00 대표\)/);
+  assert.doesNotMatch(lines.join(' '), /Placidus|undefined/);
+  assert.match(lines[2], /하우스·ASC 없음/);
+});
+
+test('only aspects that hold all day are drawn on an unknown-time wheel', () => {
+  assert.deepEqual(wheelAspects(UNKNOWN_RESULT).map((a) => a.name), ['Conjunction']);
+  const reported = { normalized: { time_accuracy: 'reported' }, aspects: [{ name: 'Trine' }, { name: 'Square' }] };
+  assert.equal(wheelAspects(reported).length, 2);
+});
+
+test('time-dependent aspects show their local windows', () => {
+  assert.equal(aspectTimingLabel(UNKNOWN_RESULT.aspects[0]), '하루 종일 유지');
+  assert.equal(aspectTimingLabel(UNKNOWN_RESULT.aspects[1]), '13:42–24:00에 태어난 경우만');
+  assert.equal(aspectTimingLabel(UNKNOWN_RESULT.aspects[2]), '00:00–03:05, 20:00–21:30에 태어난 경우만');
+  assert.equal(aspectTimingLabel({ name: 'Trine' }), '');
+});
+
+test('sign changes and stations during the day are spelled out', () => {
+  assert.equal(sensitivityNote({ time_sensitivity: { sign_stable: true, direction_stable: true, ingresses: [], stations: [] } }), '');
+  assert.equal(sensitivityNote({}), '');
+  assert.equal(sensitivityNote({ time_sensitivity: { sign_stable: false, direction_stable: true, stations: [],
+    ingresses: [{ local: '1990-05-01T09:08:21', from_sign_index: 3, to_sign_index: 4 }] } }), '09:08 게→사자');
+  assert.equal(sensitivityNote({ time_sensitivity: { sign_stable: true, direction_stable: false, ingresses: [],
+    stations: [{ local: '1990-05-17T14:20:05', to: 'D' }] } }), '14:20 순행 전환');
+});
+
+test('repeated local hours show which occurrence a time belongs to', () => {
+  const aspect = { stability: 'partial', windows: [{ start_local: '2024-11-03T01:20:00', start_offset: '-05:00', end_local: '2024-11-04T00:00:00', end_offset: '-05:00' }] };
+  assert.equal(aspectTimingLabel(aspect, { repeatedHour: true }), '01:20(UTC-05:00)–24:00에 태어난 경우만');
+  assert.equal(aspectTimingLabel(aspect), '01:20–24:00에 태어난 경우만');
+});
+
+test('24:00 is used only for an end on the next date', () => {
+  const sameDate = { stability: 'partial', windows: [{ start_local: '1990-10-07T20:00:00', start_offset: '+01:00', end_local: '1990-10-07T00:00:00', end_offset: '+00:00' }] };
+  assert.equal(aspectTimingLabel(sameDate, { repeatedHour: true }), '20:00(UTC+01:00)–00:00(UTC+00:00)에 태어난 경우만');
+  const afterGap = { stability: 'partial', windows: [{ start_local: '1919-03-30T20:00:00', end_local: '1919-03-31T00:30:00' }] };
+  assert.equal(aspectTimingLabel(afterGap), '20:00–다음 날 00:30에 태어난 경우만');
 });

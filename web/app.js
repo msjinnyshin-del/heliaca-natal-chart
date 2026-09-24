@@ -71,9 +71,25 @@ const handoff = mountInterpretationHandoff({
 });
 const placeSearch = mountPlaceSearch({onChange: invalidateResult});
 
+// The interpretation prompt is built around ASC, houses and sect, so it stays off for unknown birth time.
+function interpretationAvailable() {
+  return !downloadButton.disabled && currentResult?.normalized?.time_accuracy === 'reported';
+}
+
 function setExportAvailability(available) {
   downloadButton.disabled = !available;
-  handoff.setAvailable(available);
+  handoff.setAvailable(interpretationAvailable());
+}
+
+function timeUnknown() {
+  return byName('time_unknown').checked;
+}
+
+function syncTimeControls() {
+  const time = byName('time');
+  time.disabled = timeUnknown();
+  time.required = !timeUnknown();
+  if (timeUnknown()) time.value = '';
 }
 
 function byName(name) {
@@ -103,6 +119,8 @@ function syncCalendarControls() {
 for (const radio of form.querySelectorAll('input[name="calendar"]')) {
   radio.addEventListener('change', () => { syncCalendarControls(); invalidateResult(); });
 }
+byName('time_unknown').addEventListener('change', syncTimeControls);
+syncTimeControls();
 
 function getPayload() {
   const calendar = selectedCalendar();
@@ -110,14 +128,14 @@ function getPayload() {
     date: byName('date').value.trim(),
     calendar,
     ...(calendar === 'lunar' ? { lunar_leap: byName('lunar_leap').checked } : {}),
-    time: byName('time').value,
+    ...(timeUnknown() ? {} : { time: byName('time').value }),
     timezone: byName('timezone').value.trim(),
     latitude: byName('latitude').value === '' ? null : Number(byName('latitude').value),
     longitude: byName('longitude').value === '' ? null : Number(byName('longitude').value),
     place: byName('place').value.trim(),
     house_system: byName('house_system').value,
     node_mode: byName('node_mode').value,
-    time_accuracy: 'reported',
+    time_accuracy: timeUnknown() ? 'unknown' : 'reported',
     location_source: placeSearch.source(),
     aspect_profile: {
       version: 'major-v2',
@@ -192,6 +210,11 @@ function renderHouses(result) {
   const register = document.querySelector('#house-register');
   clear(register);
   register.className = 'detail-content';
+  if (!result.houses?.length) {
+    register.classList.add('empty-state');
+    register.textContent = '생시 미상에서는 하우스를 계산하지 않습니다. 출생 시각을 알게 되면 다시 계산하세요.';
+    return;
+  }
   register.append(buildHouseGrid(result));
 }
 
@@ -226,6 +249,12 @@ function renderEvidence(result) {
     ['Coordinates', `${metadataValue(normalized.latitude)}, ${metadataValue(normalized.longitude)}`],
     ['Location source', typeof metadata.geocoding === 'object' ? JSON.stringify(metadata.geocoding) : metadataValue(metadata.geocoding)],
     ['Julian dates', `TT ${metadataValue(normalized.jd_tt)} · UT1 ${metadataValue(normalized.jd_ut1)}`],
+    ...(normalized.time_accuracy === 'unknown' ? [
+      ['Time accuracy', `생시 미상 · 대표 시각 현지 ${metadataValue(normalized.representative_local_time)}`],
+      ['Scanned local day', `${metadataValue(normalized.day_range?.start_utc)} → ${metadataValue(normalized.day_range?.end_utc)} (${metadataValue(normalized.day_range?.hours)}h)`],
+      ['Scan rule', JSON.stringify(metadata.unknown_time_scan ?? {})],
+      ['Excluded by mode', metadataValue(metadata.excluded_by_mode)],
+    ] : []),
     ['Calculation profile', metadataValue(metadata.profile)],
     ['Rules', `${metadataValue(settings.zodiac)} · house ${metadataValue(settings.house_system)} · node ${metadataValue(settings.node_mode)} · Lilith ${metadataValue(settings.lilith_mode)}`],
     ['Aspect profile', JSON.stringify(settings.aspect_profile ?? {})],
@@ -248,6 +277,9 @@ function renderResult(result, payload) {
   currentFingerprint = requestFingerprint(payload);
   clear(chartStage);
   chartStage.append(createNatalWheel(result));
+  document.querySelector('#wheel-caption').textContent = result.normalized?.time_accuracy === 'unknown'
+    ? '생시 미상: 양자리 0°를 왼쪽에 둔 tropical wheel. 현지 정오 대표 위치와 하루 종일 유지되는 어스펙트만 그립니다. ASC·하우스는 없습니다.'
+    : 'ASC를 왼쪽에 둔 tropical wheel. 바깥 사인은 균등 30°, 안쪽 하우스는 실제 cusp 간격입니다.';
   renderPositions(result);
   renderAspects(result);
   renderHouses(result);
@@ -255,7 +287,7 @@ function renderResult(result, payload) {
 
   const displayName = byName('name').value.trim();
   resultTitle.textContent = displayName ? `${displayName}의 네이털 차트` : '네이털 차트';
-  resultSubtitle.textContent = `${payload.calendar === 'lunar' ? `음력 ${payload.date}${payload.lunar_leap ? '(윤달)' : ''} → 양력 ${result.normalized?.solar_date || '—'}` : payload.date} ${payload.time} · ${payload.place} · ${result.settings?.house_system || payload.house_system} / ${result.settings?.node_mode || payload.node_mode} node`;
+  resultSubtitle.textContent = `${payload.calendar === 'lunar' ? `음력 ${payload.date}${payload.lunar_leap ? '(윤달)' : ''} → 양력 ${result.normalized?.solar_date || '—'}` : payload.date} ${payload.time_accuracy === 'unknown' ? '생시 미상' : payload.time} · ${payload.place} · ${result.settings?.house_system || payload.house_system} / ${result.settings?.node_mode || payload.node_mode} node`;
   workbench.setAttribute('aria-busy', 'false');
   setExportAvailability(result.status === 'calculated' && result.calculation_status === 'success');
   setBadge(result.status === 'partial' ? '부분 결과' : '현재 입력 결과', result.status === 'partial' ? 'stale' : '');
@@ -307,7 +339,9 @@ async function calculate(payload) {
       return;
     }
     renderResult(data, payload);
-    setMessage('현재 입력으로 계산을 완료했습니다.', 'info');
+    setMessage(data.normalized?.time_accuracy === 'unknown'
+      ? '생시 미상으로 계산했습니다. 정오 대표 위치이며 ASC·하우스는 없습니다. 해석용 복사는 출생 시각이 있을 때만 지원합니다.'
+      : '현재 입력으로 계산을 완료했습니다.', 'info');
   } catch (error) {
     if (error.name === 'AbortError') return;
     if (serial !== requestSerial) return;
@@ -357,7 +391,7 @@ form.addEventListener('input', (event) => {
   if (event.target.name === 'store_consent') return;  // storage choice never changes the chart
   if (event.target.name === 'name') {
     if (currentResult) resultTitle.textContent = event.target.value.trim() ? `${event.target.value.trim()}의 네이털 차트` : '네이털 차트';
-    handoff.setAvailable(!downloadButton.disabled);
+    handoff.setAvailable(interpretationAvailable());
     return;
   }
   invalidateResult();

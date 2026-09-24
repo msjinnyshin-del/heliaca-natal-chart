@@ -11,7 +11,8 @@ import swisseph as swe
 
 from .errors import ChartError
 from .rules import aspects, house_for, lots, normalize_aspect_profile, position
-from .time_input import convert_calendar, resolve_time
+from .time_input import convert_calendar, resolve_time, resolve_unknown_day, time_accuracy
+from .unknown_time import RULE_VERSION as UNKNOWN_RULE_VERSION, STEP_MINUTES, DayClock, scan_day
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data" / "ephe"
@@ -102,17 +103,29 @@ def normalize_location_source(payload, latitude, longitude, timezone_name):
     return dict(source)
 
 
-def calculate_chart(payload, allow_future=False):
-    """allow_future is an internal switch for transit moments; it is never read from the request payload."""
+UNKNOWN_EXCLUDED = ["ASC", "MC", "DSC", "IC", "houses", "Fortune", "Spirit", "sect"]
+
+
+def calculate_chart(payload, allow_future=False, require_known_time=False):
+    """allow_future / require_known_time are internal switches (transit moments, multi-chart tools);
+    they are never read from the request payload."""
     if not isinstance(payload, dict):
         raise ChartError("INVALID_INPUT", "입력은 JSON 객체여야 합니다.")
+    accuracy = time_accuracy(payload)
+    if require_known_time and accuracy != "reported":
+        raise ChartError("INVALID_INPUT", "이 계산은 출생 시각이 필요합니다. 생시 미상은 네이털 차트에서만 지원합니다.")
+    unknown = accuracy == "unknown"
     latitude, longitude = coordinate(payload, "latitude", 90), coordinate(payload, "longitude", 180)
     house_system, node_mode = payload.get("house_system", "P"), payload.get("node_mode", "true")
     if house_system not in ("P", "W", "E", "K", "O") or node_mode not in ("true", "mean"):
         raise ChartError("INVALID_INPUT", "지원하지 않는 하우스 또는 Node 설정입니다.")
     aspect_profile = normalize_aspect_profile(payload.get("aspect_profile"))
     solar_payload, calendar_conversion = convert_calendar(payload)
-    utc, offset, zone, resolution = resolve_time(solar_payload, allow_future=allow_future)
+    if unknown:
+        day = resolve_unknown_day(solar_payload)
+        utc, offset, zone, resolution = day["utc"], day["offset"], day["zone"], "day"
+    else:
+        utc, offset, zone, resolution = resolve_time(solar_payload, allow_future=allow_future)
     location_source = normalize_location_source(payload, latitude, longitude, zone)
     with ENGINE_LOCK:
         manifest = validate_data()
@@ -123,14 +136,21 @@ def calculate_chart(payload, allow_future=False):
         swe.set_delta_t_userdef(swe.DELTAT_AUTOMATIC)
         try:
             jd_tt, jd_ut1 = swe.utc_to_jd(utc.year, utc.month, utc.day, utc.hour, utc.minute, utc.second, swe.GREG_CAL)
-            cusps, ascmc = swe.houses_ex(jd_ut1, latitude, longitude, house_system.encode("ascii"), 0)
         except swe.Error:
-            raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "선택한 위치에서 하우스 계산에 실패했습니다. 다른 하우스 시스템을 선택하세요.") from None
-        if len(cusps) != 12 or not all(math.isfinite(x) for x in (*cusps, *ascmc, jd_tt, jd_ut1)):
-            raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "하우스 계산이 비정상 수치를 반환했습니다.")
-        widths = [(cusps[(i + 1) % 12] - cusps[i]) % 360 for i in range(12)]
-        if any(w <= 0 for w in widths) or abs(sum(widths) - 360) > 1e-7:
-            raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "유효하지 않은 하우스 커스프 순서입니다.")
+            raise ChartError("UNSUPPORTED_DATE", "Julian day로 변환할 수 없는 시각입니다.") from None
+        if not (math.isfinite(jd_tt) and math.isfinite(jd_ut1)):
+            raise ChartError("UNSUPPORTED_DATE", "Julian day 변환 결과가 비정상 수치입니다.")
+        cusps = ascmc = None
+        if not unknown:  # an unknown birth time has no houses or angles by definition (spec §2.3)
+            try:
+                cusps, ascmc = swe.houses_ex(jd_ut1, latitude, longitude, house_system.encode("ascii"), 0)
+            except swe.Error:
+                raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "선택한 위치에서 하우스 계산에 실패했습니다. 다른 하우스 시스템을 선택하세요.") from None
+            if len(cusps) != 12 or not all(math.isfinite(x) for x in (*cusps, *ascmc, jd_tt, jd_ut1)):
+                raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "하우스 계산이 비정상 수치를 반환했습니다.")
+            widths = [(cusps[(i + 1) % 12] - cusps[i]) % 360 for i in range(12)]
+            if any(w <= 0 for w in widths) or abs(sum(widths) - 360) > 1e-7:
+                raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "유효하지 않은 하우스 커스프 순서입니다.")
         obliquity = swe.calc(jd_tt, swe.ECL_NUT, 0)[0][0]
         bodies = []
         definitions = BODY_DEFS + (("NorthNode", "북노드", "☊", swe.TRUE_NODE if node_mode == "true" else swe.MEAN_NODE),
@@ -138,15 +158,16 @@ def calculate_chart(payload, allow_future=False):
         def make_body(body_id, name, symbol, values, returned):
             lon, lat, distance, speed = values[:4]
             equatorial = swe.cotrans((lon, lat, distance), -obliquity)
-            altitude = swe.azalt(jd_ut1, swe.EQU2HOR, (longitude, latitude, 0), 0, 15, equatorial)[1]
-            if not all(math.isfinite(v) for v in (*equatorial, altitude)):
+            # Altitude only serves sect, which an unknown birth time cannot decide.
+            altitude = None if unknown else swe.azalt(jd_ut1, swe.EQU2HOR, (longitude, latitude, 0), 0, 15, equatorial)[1]
+            if not all(math.isfinite(v) for v in (*equatorial, 0.0 if altitude is None else altitude)):
                 raise ChartError("UNEXPECTED_EPHEMERIS_FALLBACK", "지평/적도 좌표 변환에 실패했습니다.")
             threshold = STATION_THRESHOLDS.get(body_id)
             direction = "S" if threshold is not None and abs(speed) < threshold else "R" if speed < 0 else "D" if speed > 0 else "undetermined"
             return {"id": body_id, "name": name, "symbol": symbol, **position(lon), "latitude": lat,
                     "speed": speed, "retrograde": speed < 0 if speed != 0 else None,
                     "direction": direction, "near_station": direction == "S", "station_threshold": threshold,
-                    "house": house_for(lon, cusps), "declination": equatorial[1], "altitude": altitude,
+                    "house": None if unknown else house_for(lon, cusps), "declination": equatorial[1], "altitude": altitude,
                     "antiscia": (180 - lon) % 360, "flags": returned}
         for body_id, name, symbol, number in definitions:
             values, returned = checked_calc(jd_tt, number)
@@ -154,16 +175,35 @@ def calculate_chart(payload, allow_future=False):
             if body_id == "NorthNode":
                 south = ((values[0] + 180) % 360, -values[1], values[2], values[3], -values[4], values[5])
                 bodies.append(make_body("SouthNode", "남노드", "☋", south, returned))
-        angles = [{"id": key, **position(lon)} for key, lon in (("ASC", ascmc[0]), ("MC", ascmc[1]), ("DSC", ascmc[0] + 180), ("IC", ascmc[1] + 180))]
-        sect, fortune, spirit = lots(ascmc[0], bodies[0]["longitude"], bodies[1]["longitude"], bodies[0]["altitude"])
-        for key, name, symbol, lon in (("Fortune", "포르투나", "⊗", fortune), ("Spirit", "스피릿", "◇", spirit)):
-            bodies.append({"id": key, "name": name, "symbol": symbol, **position(lon), "house": house_for(lon, cusps),
-                           "latitude": None, "speed": None, "retrograde": None, "direction": "not_applicable", "declination": None,
-                           "altitude": None, "antiscia": (180 - lon) % 360, "flags": None})
+        if unknown:
+            angles, sect = [], None
+            day_tt = [swe.utc_to_jd(t.year, t.month, t.day, t.hour, t.minute, t.second, swe.GREG_CAL)[0]
+                      for t in (day["start"], day["end"])]
+            clock = DayClock(day["start"], day["end"], day_tt[0], day_tt[1], day["zoneinfo"])
+
+            def positions(jd):
+                result = {}
+                for body_id, _, _, number in definitions:
+                    values, _ = checked_calc(jd, number)
+                    result[body_id] = (values[0], values[3])
+                    if body_id == "NorthNode":
+                        result["SouthNode"] = ((values[0] + 180) % 360, values[3])
+                return result
+            sensitivity, scanned_aspects = scan_day(clock, positions, bodies, aspect_profile)
+            for body in bodies:
+                body["time_sensitivity"] = sensitivity[body["id"]]
+        else:
+            angles = [{"id": key, **position(lon)} for key, lon in (("ASC", ascmc[0]), ("MC", ascmc[1]), ("DSC", ascmc[0] + 180), ("IC", ascmc[1] + 180))]
+            sect, fortune, spirit = lots(ascmc[0], bodies[0]["longitude"], bodies[1]["longitude"], bodies[0]["altitude"])
+            for key, name, symbol, lon in (("Fortune", "포르투나", "⊗", fortune), ("Spirit", "스피릿", "◇", spirit)):
+                bodies.append({"id": key, "name": name, "symbol": symbol, **position(lon), "house": house_for(lon, cusps),
+                               "latitude": None, "speed": None, "retrograde": None, "direction": "not_applicable", "declination": None,
+                               "altitude": None, "antiscia": (180 - lon) % 360, "flags": None})
         used_data = []
+        span = (min(day_tt), max(day_tt)) if unknown else (jd_tt, jd_tt)
         for index, filename in enumerate(("sepl_18.se1", "semo_18.se1", "seas_18.se1")):
             path, start, end, denum = swe.get_current_file_data(index)
-            if Path(path).resolve() != (DATA_DIR / filename).resolve() or not start <= jd_tt <= end:
+            if Path(path).resolve() != (DATA_DIR / filename).resolve() or not start <= span[0] <= span[1] <= end:
                 raise ChartError("UNEXPECTED_EPHEMERIS_FALLBACK", "실제 사용 천체력 파일/범위가 manifest와 다릅니다.")
             item = next(item for item in manifest["files"] if item["name"] == filename)
             used_data.append({**item, "start_jd": start, "end_jd": end, "denum": denum})
@@ -174,14 +214,23 @@ def calculate_chart(payload, allow_future=False):
     settings = {"house_system": house_system, "node_mode": node_mode, "lilith_mode": "mean", "zodiac": "tropical", "rounding": "nearest_second",
                 "house_assignment": "longitude-cusp-half-open-v1", "sect_rule": "geocentric-geometric-sun-center-altitude>=0",
                 "aspect_rule": "major-v2", "aspect_profile": aspect_profile}
+    if unknown:
+        settings["unknown_time_rule"] = UNKNOWN_RULE_VERSION
     fingerprint = hashlib.sha256(json.dumps({"utc": utc.isoformat(), "latitude": latitude, "longitude": longitude, "settings": settings,
                                              "location_source": location_source, "manifest": manifest}, sort_keys=True).encode()).hexdigest()
+    normalized = {"utc": utc.isoformat().replace("+00:00", "Z"), "offset": offset, "timezone": zone, "latitude": latitude, "longitude": longitude,
+                  "jd_tt": jd_tt, "jd_ut1": jd_ut1, "time_resolution": resolution, "time_accuracy": accuracy,
+                  "solar_date": solar_payload["date"], "calendar_conversion": calendar_conversion}
+    if unknown:
+        normalized["representative_local_time"] = day["representative_local_time"]
+        normalized["day_range"] = {"start_utc": day["start"].isoformat().replace("+00:00", "Z"),
+                                   "end_utc": day["end"].isoformat().replace("+00:00", "Z"),
+                                   "hours": (day["end"] - day["start"]).total_seconds() / 3600}
     return {"status": "calculated", "calculation_status": "success", "input": original,
-            "normalized": {"utc": utc.isoformat().replace("+00:00", "Z"), "offset": offset, "timezone": zone, "latitude": latitude, "longitude": longitude,
-                           "jd_tt": jd_tt, "jd_ut1": jd_ut1, "time_resolution": resolution, "time_accuracy": "reported",
-                           "solar_date": solar_payload["date"], "calendar_conversion": calendar_conversion},
+            "normalized": normalized,
             "settings": settings, "bodies": bodies, "angles": angles,
-            "houses": [{"number": i + 1, **position(lon)} for i, lon in enumerate(cusps)], "aspects": aspects(bodies, angles, aspect_profile), "sect": sect,
+            "houses": [] if unknown else [{"number": i + 1, **position(lon)} for i, lon in enumerate(cusps)],
+            "aspects": scanned_aspects if unknown else aspects(bodies, angles, aspect_profile), "sect": sect,
             "metadata": {"engine": manifest["engine"], "engine_version": swe.version, "binding_version": version("pyswisseph"), "tzdb": manifest["tzdb"],
                          "profile": "reference-tropical-v1", "requested_flags": FLAGS, "data": used_data, "input_fingerprint": fingerprint,
                          "time_policy": manifest["time_policy"], "delta_t_seconds": (jd_tt - jd_ut1) * 86400,
@@ -189,9 +238,15 @@ def calculate_chart(payload, allow_future=False):
                                                                    if location_source["mode"] == "geocoded" else
                                                                    "사용자가 직접 제공한 좌표와 IANA timezone이며 지리적 경계를 자동 검증하지 않았습니다.")},
                          "near_station_policy": "표시 임계값 기반 near-station이며 정확한 정지 시각 탐색 결과가 아닙니다.",
-                         "not_evaluated": ["dignities", "patterns", "applying/separating", "interpretation", "unknown/approximate time"]},
+                         "not_evaluated": ["dignities", "patterns", "applying/separating", "interpretation", "approximate time"],
+                         **({"excluded_by_mode": UNKNOWN_EXCLUDED,
+                             "unknown_time_scan": {"rule_version": UNKNOWN_RULE_VERSION, "step_minutes": STEP_MINUTES,
+                                                   "method": "10분 표본 + 경계 이분 탐색(1초 미만) + 표본 사이 극값 보정; 양 끝값 비교만으로 판정하지 않음"}}
+                            if unknown else {})},
             "warnings": ["좌표와 IANA 시간대의 지리적 일치는 사용자가 확인해야 합니다.", "최근접 초 표시값과 원시 사인/하우스 판정은 구분됩니다.",
-                         "S는 속도 임계값 기반 근정지 표시이며 정확한 station 시각을 계산했다는 뜻이 아닙니다.",
-                         "스피릿은 정의한 Lot of Spirit이며 참조 이미지의 다이아몬드 기호와 동일하다고 확정하지 않습니다."]
+                         "S는 속도 임계값 기반 근정지 표시이며 정확한 station 시각을 계산했다는 뜻이 아닙니다."]
+                        + ([f"생시 미상: 현지 {day['representative_local_time']}를 대표 시각으로 쓴 표시값입니다. ASC·MC·하우스·Fortune·주야는 계산하지 않았습니다. "
+                            "하루 동안 바뀌지 않는 사인·어스펙트만 확정으로 보고, 변경 가능 항목은 시각에 따라 달라집니다."] + day["notes"]
+                           if unknown else ["스피릿은 정의한 Lot of Spirit이며 참조 이미지의 다이아몬드 기호와 동일하다고 확정하지 않습니다."])
                         + ([f"1970년 이전 출생: IANA 역사 시간대 기록의 UTC{offset}를 적용했습니다. 당시 서머타임·표준시 변경이 출생 기록과 다를 수 있으니 확인하세요."]
                            if solar_payload["date"] < "1970" else [])}

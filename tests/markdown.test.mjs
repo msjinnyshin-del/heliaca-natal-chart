@@ -60,6 +60,9 @@ test('names and places remain quoted table data, not HTML or new prompt sections
 });
 
 test('rejects partial, blocked or incomplete result instead of inventing chart data', () => {
+  const unknownTime = structuredClone(chart);
+  unknownTime.normalized.time_accuracy = 'unknown';
+  assert.throws(() => exporter.buildInterpretationMarkdown(unknownTime), /완성된/);
   for (const status of ['partial', 'blocked']) {
     assert.throws(() => exporter.buildInterpretationMarkdown({...chart,status}), /완성된/);
   }

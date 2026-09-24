@@ -72,8 +72,8 @@ def lots(asc, sun, moon, altitude):
     return sect, (asc + difference) % 360, (asc - difference) % 360
 
 
-def aspects(bodies, angles, profile=None):
-    profile = normalize_aspect_profile(profile)
+def aspect_candidates(bodies, angles, profile):
+    """Every (a, b, group, name, target, allowed orb) the profile would test; shared by the day scan."""
     output = []
     bodies_by_id = {body["id"]: body for body in bodies}
     angles_by_id = {angle["id"]: angle for angle in angles}
@@ -94,15 +94,30 @@ def aspects(bodies, angles, profile=None):
         pairs.extend((a, b, "planets") for b in planets[i + 1:])
         pairs.extend((a, b, group) for b, group in extras)
     for a, b, group in pairs:
-        separation = abs((a["longitude"] - b["longitude"] + 180) % 360 - 180)
         for name, target, base_orb in ASPECTS:
             allowed = (base_orb + (2 if a["id"] in ("Sun", "Moon") or b["id"] in ("Sun", "Moon") else 0)
                        if group == "planets" else min(base_orb, profile["orbs"][group]))
-            orb = abs(separation - target)
-            if orb <= allowed:
-                output.append({"id": "|".join(sorted((a["id"], b["id"]))), "a": a["id"], "b": b["id"],
-                               "name": name, "angle": target, "separation": separation, "orb": orb,
-                               "allowed_orb": allowed, "rule_version": ASPECT_PROFILE_VERSION,
-                               "profile_version": profile["version"], "target_group": group,
-                               "motion": "not_evaluated"})
+            output.append((a, b, group, name, target, allowed))
+    return output
+
+
+def separation_of(lon_a, lon_b):
+    return abs((lon_a - lon_b + 180) % 360 - 180)
+
+
+def aspect_entry(a, b, group, name, target, allowed, separation, profile):
+    return {"id": "|".join(sorted((a["id"], b["id"]))), "a": a["id"], "b": b["id"],
+            "name": name, "angle": target, "separation": separation, "orb": abs(separation - target),
+            "allowed_orb": allowed, "rule_version": ASPECT_PROFILE_VERSION,
+            "profile_version": profile["version"], "target_group": group,
+            "motion": "not_evaluated"}
+
+
+def aspects(bodies, angles, profile=None):
+    profile = normalize_aspect_profile(profile)
+    output = []
+    for a, b, group, name, target, allowed in aspect_candidates(bodies, angles, profile):
+        separation = separation_of(a["longitude"], b["longitude"])
+        if abs(separation - target) <= allowed:
+            output.append(aspect_entry(a, b, group, name, target, allowed, separation, profile))
     return output

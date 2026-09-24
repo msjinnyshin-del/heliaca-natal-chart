@@ -59,7 +59,7 @@ def calculate_composite(payload):
     charts = {}
     for key in ("person_a", "person_b"):
         try:
-            charts[key] = calculate_chart(payload[key])
+            charts[key] = calculate_chart(payload[key], require_known_time=True)
         except ChartError as error:
             details = dict(error.details or {})
             details["person"] = key

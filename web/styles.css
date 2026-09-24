@@ -163,6 +163,13 @@ h3 { font-size: clamp(1.45rem, 2.3vw, 2.25rem); letter-spacing: -.025em; }
 .hero-hints .lunar-note { color: var(--ink-faint); }
 .hero-hint-right { margin: 0; text-align: right; }
 .hero-form .place-warning { margin: 0; }
+.time-unknown-toggle { display: inline-flex; align-items: center; gap: .3rem; margin-left: .6rem; color: var(--ink-soft); white-space: nowrap; cursor: pointer; }
+.time-unknown-toggle input { accent-color: var(--teal); }
+.band-time input[type="time"]:disabled { opacity: .35; }
+.time-sensitive { display: block; margin-top: .2rem; color: var(--coral); font-size: .66rem; }
+.register-card.is-conditional { border-style: dashed; opacity: .82; }
+.aspect-timing { color: var(--coral); }
+.daily-range { display: block; margin-top: .2rem; color: var(--ink-faint); font-size: .66rem; }
 .consent-control { display: inline-flex; align-items: center; gap: .45rem; color: var(--ink-soft); font-size: .72rem; cursor: pointer; }
 .consent-control input { accent-color: var(--teal); }
 .consent-control b { color: var(--ink-faint); font-weight: 400; }

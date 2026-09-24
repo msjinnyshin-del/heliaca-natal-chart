@@ -1,5 +1,5 @@
 import { annularSector, circularMidpoint, polarPoint, staggerLabels } from './geometry.js';
-import { buildWheelMetadata, formatWheelPosition } from './chart-profile.js';
+import { buildWheelMetadata, formatWheelPosition, isUnknownTime, wheelAspects } from './chart-profile.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const SIGNS = [
@@ -32,8 +32,11 @@ export function createNatalWheel(result) {
     xmlns: NS,
   });
   const metadataLines = buildWheelMetadata(result);
-  svg.append(el('title', { id: 'wheel-title' }, `${result.input?.date || ''} ${result.input?.time || ''} 네이털 차트`));
-  svg.append(el('desc', { id: 'wheel-desc' }, `ASC가 왼쪽인 tropical chart. 실제 황경 tick, 12개 하우스 커스프, major aspect를 표시합니다. ${metadataLines.join('. ')}`));
+  const unknown = isUnknownTime(result);
+  svg.append(el('title', { id: 'wheel-title' }, `${result.input?.date || ''} ${unknown ? '생시 미상' : result.input?.time || ''} 네이털 차트`));
+  svg.append(el('desc', { id: 'wheel-desc' }, unknown
+    ? `생시 미상 tropical chart. ASC와 하우스 없이 양자리 0°를 왼쪽에 두고, 현지 정오 대표 위치와 하루 종일 유지되는 major aspect만 표시합니다. ${metadataLines.join('. ')}`
+    : `ASC가 왼쪽인 tropical chart. 실제 황경 tick, 12개 하우스 커스프, major aspect를 표시합니다. ${metadataLines.join('. ')}`));
   svg.append(el('rect', { x: 0, y: 0, width: 720, height: 804, rx: 18, fill: '#020606', class: 'wheel-background' }));
 
   const group = el('g');
@@ -69,7 +72,7 @@ export function createNatalWheel(result) {
 
   const longitudeById = new Map();
   [...result.bodies, ...result.angles].forEach((item) => longitudeById.set(item.id, item.longitude));
-  for (const aspect of result.aspects || []) {
+  for (const aspect of wheelAspects(result)) {
     const a = longitudeById.get(aspect.a);
     const b = longitudeById.get(aspect.b);
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
@@ -111,7 +114,9 @@ export function createNatalWheel(result) {
       fill: '#a9c4be', 'font-size': '8.5', 'font-family': 'monospace' }, line));
   });
   band.append(el('text', { x: 680, y: 780, class: 'wheel-legend', fill: '#d6ece7', 'font-size': '8',
-    'font-family': 'monospace', 'text-anchor': 'end' }, '⊗ Fortune · ◇ Spirit · ⚸ Mean Lilith · R retrograde · S near-station'));
+    'font-family': 'monospace', 'text-anchor': 'end' }, unknown
+    ? '생시 미상 · 정오 대표 위치 · ⚸ Mean Lilith · R retrograde · S near-station'
+    : '⊗ Fortune · ◇ Spirit · ⚸ Mean Lilith · R retrograde · S near-station'));
   svg.append(band);
   return svg;
 }

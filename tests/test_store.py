@@ -147,6 +147,17 @@ class StoreTests(unittest.TestCase):
         with self.assertRaises(store.StoreError):
             store.delete_visitor("%")
 
+    def test_unknown_time_summary_keeps_only_whole_day_signs(self):
+        result = {"calculation_status": "success", "sect": None,
+                  "normalized": {"utc": "1990-05-01T03:00:00Z", "time_accuracy": "unknown"},
+                  "bodies": [{"id": "Sun", "sign_index": 1, "position": "황소 10°", "time_sensitivity": {"sign_stable": True}},
+                             {"id": "Moon", "sign_index": 4, "position": "사자 01°", "time_sensitivity": {"sign_stable": False}}],
+                  "angles": [], "metadata": {"input_fingerprint": "f"}}
+        item = store.get_submission(self.record(result=result))
+        self.assertEqual((item["sun_sign"], item["moon_sign"], item["asc_sign"]), ("황소", None, None))
+        self.assertEqual((item["summary"]["time_accuracy"], item["summary"]["utc"], item["summary"]["moon_position"]),
+                         ("unknown", None, None))
+
     def test_raw_input_round_trips_as_json(self):
         raw = {**RAW, "aspect_profile": {"version": "major-v2"}, "location_source": {"mode": "manual"}}
         item = store.get_submission(self.record(raw=raw))

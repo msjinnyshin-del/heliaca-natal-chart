@@ -48,7 +48,12 @@
                 </span>
                 <input id="date" name="date" type="date" required>
               </div>
-              <label class="band-cell band-time"><span class="band-label">시각 <b>현지</b></span><input id="time" name="time" type="time" step="60" required></label>
+              <div class="band-cell band-time">
+                <span class="band-label"><label for="time">시각 <b>현지</b></label>
+                  <label class="time-unknown-toggle"><input type="checkbox" name="time_unknown"> 생시 모름</label>
+                </span>
+                <input id="time" name="time" type="time" step="60" required>
+              </div>
               <div class="band-cell band-place">
                 <span class="band-label"><label for="place">출생지</label></span>
                 <div class="place-search-row">
@@ -120,7 +125,7 @@
         </div>
         <div class="form-footer">
           <div class="form-notes">
-            <p><strong>1900년 이후의 알려진 출생 시각을 지원합니다.</strong> 1970년 이전 출생은 당시 기록된 시간대(서머타임 등)를 적용하며 결과에 적용된 UTC 오프셋을 표시합니다. 시각을 모르면 ASC·MC·하우스를 정확히 계산할 수 없으므로 임의의 시각을 입력하지 마세요.</p>
+            <p><strong>1900년 이후 출생을 지원합니다.</strong> 1970년 이전 출생은 당시 기록된 시간대(서머타임 등)를 적용하며 결과에 적용된 UTC 오프셋을 표시합니다. 시각을 모르면 임의의 시각 대신 <b>생시 모름</b>을 선택하세요. 현지 정오를 대표값으로 쓰고, ASC·MC·하우스·주야는 계산하지 않으며, 하루 중 바뀌는 사인·어스펙트는 따로 표시합니다.</p>
             <p id="storage-notice" class="storage-notice">저장에 동의한 경우에만 이름·생년월일시·출생지를 서비스 운영 목적으로 저장하며 관리자만 열람하고 180일 후 자동 삭제합니다. 동의하지 않아도 계산할 수 있고, 이때는 계산 성공 여부·태양/달/ASC 별자리·유입 경로만 익명 브라우저 ID와 함께 기록됩니다. <button id="delete-my-data" class="inline-link-button" type="button">이 브라우저의 저장 기록 삭제</button></p>
             <p id="place-privacy" class="place-privacy">출생지 검색 시 도시 검색어만 외부 서비스에 전송됩니다. 이름과 생년월일시는 전송하지 않습니다. 데이터: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a></p>
           </div>
