@@ -1,7 +1,7 @@
 -- Natal chart admin store for Postgres (Neon or any Postgres 13+). Idempotent: safe to run again.
 -- Run once (Neon SQL Editor or `psql "$DATABASE_URL_UNPOOLED" -f db/schema.sql`) before the first deploy;
 -- the app never migrates Postgres at request time.
--- Mirrors SQLite migrations 1-3 in natal/store.py (SCHEMA_VERSION = 3).
+-- Mirrors SQLite migrations 1-5 in natal/store.py (SCHEMA_VERSION = 5).
 -- The server connects as the database owner via DATABASE_URL; the public Data API roles get no access.
 
 CREATE TABLE IF NOT EXISTS submissions (
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS submissions (
     created_at TEXT NOT NULL,
     visitor_id TEXT,
     display_name TEXT,
-    raw_input TEXT NOT NULL,
+    raw_input TEXT,  -- NULL without storage consent or after the 180-day retention (spec §12)
     status TEXT NOT NULL,
     error_code TEXT,
     summary TEXT,
@@ -18,14 +18,20 @@ CREATE TABLE IF NOT EXISTS submissions (
     moon_sign TEXT,
     asc_sign TEXT,
     fingerprint TEXT,
-    consent INTEGER NOT NULL DEFAULT 0 CHECK (consent IN (0, 1)),
+    consent INTEGER NOT NULL DEFAULT 0,  -- 0 none, 1 legacy notice-only, 2 opt-in (constraint below)
     utm_source TEXT, utm_medium TEXT, utm_campaign TEXT, utm_content TEXT, utm_term TEXT,
     short_code TEXT
 );
+-- Consent-only storage (SQLite migration 5). Apply this file BEFORE deploying the matching app version.
+-- Existing consent=1 rows (notice-only policy) stay 1 = legacy; opt-in is 2, so no relabelling is needed.
+ALTER TABLE submissions ALTER COLUMN raw_input DROP NOT NULL;
+ALTER TABLE submissions DROP CONSTRAINT IF EXISTS submissions_consent_check;
+ALTER TABLE submissions ADD CONSTRAINT submissions_consent_check CHECK (consent IN (0, 1, 2));
 CREATE INDEX IF NOT EXISTS submissions_created_at ON submissions(created_at);
 CREATE INDEX IF NOT EXISTS submissions_visitor ON submissions(visitor_id, created_at);
 CREATE INDEX IF NOT EXISTS submissions_status ON submissions(status);
 CREATE INDEX IF NOT EXISTS submissions_short_code ON submissions(short_code);
+CREATE INDEX IF NOT EXISTS submissions_raw_held ON submissions(created_at) WHERE raw_input IS NOT NULL OR display_name IS NOT NULL OR place IS NOT NULL OR summary IS NOT NULL OR fingerprint IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS utm_channels (
     key TEXT PRIMARY KEY CHECK (length(key) BETWEEN 1 AND 64),
@@ -119,13 +125,14 @@ ALTER TABLE utm_campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE utm_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE utm_clicks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login_attempts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shares ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE role_name TEXT;
 BEGIN
     FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
-            EXECUTE format('REVOKE ALL ON submissions, utm_channels, utm_campaigns, utm_links, utm_clicks, login_attempts FROM %I', role_name);
+            EXECUTE format('REVOKE ALL ON submissions, utm_channels, utm_campaigns, utm_links, utm_clicks, login_attempts, shares FROM %I', role_name);
             EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', role_name);
         END IF;
     END LOOP;

@@ -34,8 +34,29 @@ const visitorId = getVisitorId(storage);
 const attribution = captureAttribution(storage, window.location.search);
 
 function clientContext() {
-  return buildClientContext({ visitorId, name: byName('name').value, attribution });
+  return buildClientContext({ visitorId, name: byName('name').value, consent: byName('store_consent').checked, attribution });
 }
+
+// Deletes every row this browser's anonymous id produced (stored input and statistics alike).
+document.querySelector('#delete-my-data').addEventListener('click', async () => {
+  if (!visitorId) {
+    setMessage('이 브라우저에서는 저장 기록을 식별할 수 없습니다.', 'error');
+    return;
+  }
+  if (!window.confirm('이 브라우저에서 계산한 모든 저장 기록을 삭제합니다. 되돌릴 수 없습니다.')) return;
+  try {
+    const response = await fetch('/api/my-data/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ visitor_id: visitorId }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.error?.message || `HTTP ${response.status}`);
+    setMessage(data.deleted ? `저장 기록 ${data.deleted}건을 삭제했습니다.` : '이 브라우저로 저장된 기록이 없습니다.', 'info');
+  } catch (error) {
+    setMessage(`저장 기록을 삭제하지 못했습니다 · ${error.message}`, 'error');
+  }
+});
 
 let currentResult = null;
 let currentFingerprint = '';
@@ -333,6 +354,7 @@ function invalidateResult() {
 }
 
 form.addEventListener('input', (event) => {
+  if (event.target.name === 'store_consent') return;  // storage choice never changes the chart
   if (event.target.name === 'name') {
     if (currentResult) resultTitle.textContent = event.target.value.trim() ? `${event.target.value.trim()}의 네이털 차트` : '네이털 차트';
     handoff.setAvailable(!downloadButton.disabled);

@@ -75,9 +75,10 @@ NATAL_ADMIN_PASSWORD='긴-비밀번호' NATAL_ADMIN_SECRET='임의의-긴-문자
 ```
 
 - 관리자 화면: <http://127.0.0.1:8765/admin/> (로그인: `/admin/login`). 탭: 통계 · 사용자 · 입력 기록(상세에서 원문·재계산 차트·삭제).
+- 저장 범위: 이름·출생 원문은 사용자가 저장 동의(기본 해제)를 선택한 경우에만 저장하고 180일 뒤 자동으로 지운다(통계 열은 유지). 동의가 없으면 상태·태양/달/ASC 사인·익명 방문자 ID·UTM만 남는다. 사용자는 폼의 "이 브라우저의 저장 기록 삭제"(`POST /api/my-data/delete`)로 직접 삭제할 수 있다. 원문이 없는 행은 관리자 화면에서 재계산하지 않는다.
 - `NATAL_ADMIN_PASSWORD`가 없으면 모든 `/admin*`, `/api/admin/*`는 503이다. `NATAL_ADMIN_SECRET`이 없으면 프로세스별 임의 키를 써서 서버 재시작 시 세션이 만료된다.
 - 세션: `exp.hmac` 쿠키(HttpOnly, SameSite=Strict, 12시간, https 요청이면 `Secure`). 로그인 실패 시 1초 지연, IP별 15분 5회 제한 — 실패 기록은 DB `login_attempts`(IP는 HMAC 해시로만 저장)에 두어 서버리스 인스턴스 간에 공유하고, DB 장애 시 프로세스 메모리로 대체한다. 관리자 POST/DELETE는 같은 Origin만 허용.
-- 저장소: 기본 `data/admin.sqlite3`(WAL, `PRAGMA user_version` 마이그레이션, `NATAL_DB_PATH`로 변경 가능, git 제외). `DATABASE_URL`(없으면 `POSTGRES_URL`)이 있으면 Postgres(Neon 등)를 쓰며, 스키마는 요청 중 마이그레이션하지 않고 `db/schema.sql`로 수동 적용한다. 백업·보관 기간은 운영자가 정한다.
+- 저장소: 기본 `data/admin.sqlite3`(WAL, `PRAGMA user_version` 마이그레이션 v5 — 기존 DB는 첫 연결 시 원문 열을 선택값으로 전환, `NATAL_DB_PATH`로 변경 가능, git 제외). `DATABASE_URL`(없으면 `POSTGRES_URL`)이 있으면 Postgres(Neon 등)를 쓰며, 스키마는 요청 중 마이그레이션하지 않고 `db/schema.sql`로 수동 적용한다. **기존 Postgres 배포는 새 앱을 배포하기 전에 `db/schema.sql`을 다시 실행해야 한다**. 이 실행이 `raw_input` NOT NULL 해제, consent 제약(0=비동의·1=이전 정책·2=동의)을 적용한다. 미적용 상태로 배포하면 비동의 기록 저장이 즉시 실패하고, 180일이 지난 행이 생기면 만료 정리와 관리자 조회도 실패한다(차트 응답은 영향 없음). 원문 보관 기간은 180일(`RAW_RETENTION_DAYS`), 백업 정책은 운영자가 정한다.
 - UTM 빌더: 관리자 탭 `UTM 빌더`(채널 여러 개 동시 생성·단축/UTM URL 복사) · `링크 장부`(누적 클릭·봇·입력·성공·전환율, 보관/복원) · `채널 · 캠페인`(추가·편집·활성 전환). 통계 탭 하단에 채널/캠페인/링크별 성과, 일별 클릭 대 입력, “UTM 직접 유입”(단축코드 없이 utm만 있는 입력)을 표시한다.
 - 단축 링크 `/l/{6자 코드}`(l·o·0·1 제외): 사이트 내부 경로 + `utm_*` + `sc=코드`로 302(no-store). 미리보기 봇·HEAD·UA 없음은 `counted=0`으로 따로 기록. 모르는/보관된 코드는 `/?utm_source=short-link&utm_medium=unknown`. 클릭 기록에는 IP·UA 원문을 저장하지 않고 `ua_family`(예: `kakaotalk-inapp`)만 남긴다. 목적지는 `/`로 시작하는 경로만(외부 URL·`//`·`\`·`:`·`..`·`/admin`·`/api`·`/l` 불가). QR 생성은 새 의존성 없이 구현하지 않았다.
 - 유입 추적: 랜딩 URL의 `utm_source/medium/campaign/content/term`과 단축코드 `sc`를 첫 유입 기준으로 브라우저에 보관했다가 계산 요청의 `client` 객체로 보낸다.

@@ -80,12 +80,14 @@ export function readAttribution(storage) {
   }
 }
 
-export function buildClientContext({ visitorId, name, attribution }) {
-  const trimmed = typeof name === 'string' ? name.trim().slice(0, 80) : '';
+// Storing the name and raw birth input is opt-in; without consent the name is not even sent.
+export function buildClientContext({ visitorId, name, consent, attribution }) {
+  const stored = consent === true;
+  const trimmed = stored && typeof name === 'string' ? name.trim().slice(0, 80) : '';
   return {
     visitor_id: isVisitorId(visitorId) ? visitorId : null,
     name: trimmed || null,
-    consent: true,
+    store_consent: stored,
     utm: attribution?.utm ?? {},
     short_code: attribution?.short_code ?? null,
   };

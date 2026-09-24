@@ -163,6 +163,11 @@ h3 { font-size: clamp(1.45rem, 2.3vw, 2.25rem); letter-spacing: -.025em; }
 .hero-hints .lunar-note { color: var(--ink-faint); }
 .hero-hint-right { margin: 0; text-align: right; }
 .hero-form .place-warning { margin: 0; }
+.consent-control { display: inline-flex; align-items: center; gap: .45rem; color: var(--ink-soft); font-size: .72rem; cursor: pointer; }
+.consent-control input { accent-color: var(--teal); }
+.consent-control b { color: var(--ink-faint); font-weight: 400; }
+.inline-link-button { border: 0; padding: 0; color: var(--ink-soft); background: none; font: inherit; text-decoration: underline; text-underline-offset: .18em; cursor: pointer; }
+.inline-link-button:hover, .inline-link-button:focus-visible { color: var(--teal-bright); }
 body[data-tool="natal"] .input-station::before { content: 'SETTINGS / 01'; }
 
 .input-station {

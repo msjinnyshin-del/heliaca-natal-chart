@@ -1,6 +1,7 @@
-"""Admin-only SQLite store of chart submissions (spec §12: stored with notice, admin access, delete path).
+"""Admin-only SQLite store of chart submissions (spec §12: opt-in raw input, retention, delete paths).
 
-Raw birth input lives only here. Nothing in this module logs or prints row data.
+Raw birth input (with the name, place and positions derived from it) is stored only when the user opts in,
+and is cleared after RAW_RETENTION_DAYS. Statistics columns stay. Nothing in this module logs row data.
 """
 from datetime import datetime, timedelta, timezone
 import json
@@ -14,7 +15,16 @@ from .rules import SIGNS
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = ROOT / "data" / "admin.sqlite3"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
+RAW_RETENTION_DAYS = 180
+# Columns that identify a person or reproduce their birth data; cleared on expiry, never stored without consent.
+RAW_COLUMNS = ("raw_input", "display_name", "place", "summary", "fingerprint")
+# `consent`: 0 = no opt-in (raw columns empty); 1 = stored under the pre-2026-09-24 notice-only policy
+# (that app wrote 1 for every row, so 1 always means legacy, even if an old deploy keeps writing it);
+# 2 = opted in via `client.store_consent`. Legacy rows follow the same 180-day expiry.
+CONSENT_NONE, CONSENT_LEGACY, CONSENT_OPT_IN = 0, 1, 2
+# Must match the partial index predicate so the per-request purge only visits rows still holding raw data.
+RAW_HELD = "(raw_input IS NOT NULL OR display_name IS NOT NULL OR place IS NOT NULL OR summary IS NOT NULL OR fingerprint IS NOT NULL)"
 _INIT_LOCK = threading.Lock()
 _INITIALIZED = set()
 
@@ -131,6 +141,46 @@ MIGRATIONS = {
         created_at TEXT NOT NULL
     );
     """,
+    # raw_input becomes optional: without consent (or after expiry) only statistics columns are kept.
+    # One explicit transaction: executescript() autocommits otherwise, and a crash after DROP would lose the table.
+    # Existing consent=1 rows keep meaning legacy; AUTOINCREMENT's high-water mark is carried over.
+    5: """
+    BEGIN;
+    CREATE TABLE submissions_v5 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT NOT NULL,
+        visitor_id TEXT,
+        display_name TEXT,
+        raw_input TEXT,
+        status TEXT NOT NULL,
+        error_code TEXT,
+        summary TEXT,
+        place TEXT,
+        sun_sign TEXT,
+        moon_sign TEXT,
+        asc_sign TEXT,
+        fingerprint TEXT,
+        consent INTEGER NOT NULL DEFAULT 0,
+        utm_source TEXT, utm_medium TEXT, utm_campaign TEXT, utm_content TEXT, utm_term TEXT,
+        short_code TEXT
+    );
+    INSERT INTO submissions_v5 SELECT id, created_at, visitor_id, display_name, raw_input, status, error_code, summary,
+        place, sun_sign, moon_sign, asc_sign, fingerprint, consent,
+        utm_source, utm_medium, utm_campaign, utm_content, utm_term, short_code FROM submissions;
+    INSERT INTO sqlite_sequence (name, seq)
+        SELECT 'submissions_v5', 0 WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'submissions_v5');
+    UPDATE sqlite_sequence SET seq = max(seq, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'submissions'), 0))
+        WHERE name = 'submissions_v5';
+    DROP TABLE submissions;
+    ALTER TABLE submissions_v5 RENAME TO submissions;
+    CREATE INDEX submissions_created_at ON submissions(created_at);
+    CREATE INDEX submissions_visitor ON submissions(visitor_id, created_at);
+    CREATE INDEX submissions_status ON submissions(status);
+    CREATE INDEX submissions_short_code ON submissions(short_code);
+    CREATE INDEX submissions_raw_held ON submissions(created_at) WHERE raw_input IS NOT NULL OR display_name IS NOT NULL OR place IS NOT NULL OR summary IS NOT NULL OR fingerprint IS NOT NULL;
+    PRAGMA user_version = 5;
+    COMMIT;
+    """,
 }
 
 
@@ -239,9 +289,14 @@ def migrate(connection):
     current = connection.execute("PRAGMA user_version").fetchone()[0]
     for version in sorted(MIGRATIONS):
         if version > current:
-            with connection:
-                connection.executescript(MIGRATIONS[version])
-                connection.execute(f"PRAGMA user_version = {int(version)}")
+            try:
+                with connection:
+                    connection.executescript(MIGRATIONS[version])
+                    connection.execute(f"PRAGMA user_version = {int(version)}")
+            except Exception:
+                if connection.in_transaction:  # a self-managed BEGIN ... COMMIT script that failed midway
+                    connection.rollback()
+                raise
 
 
 # ---- validation -----------------------------------------------------------
@@ -272,7 +327,8 @@ def clean_client(client):
     return {
         "visitor_id": clean_visitor_id(client.get("visitor_id")),
         "display_name": clean_name(client.get("name")),
-        "consent": client.get("consent") is True,
+        # Only the opt-in checkbox field counts; the old always-true `consent` field is ignored.
+        "consent": client.get("store_consent") is True,
         **{key: clean_utm(utm.get(key)) for key in UTM_KEYS},
         "short_code": short_code if isinstance(short_code, str) and SHORT_CODE_RE.fullmatch(short_code) else None,
     }
@@ -296,8 +352,32 @@ def summarize(result):
     }
 
 
+def utc_now():
+    return datetime.now(timezone.utc)
+
+
 def now_iso():
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def retention_cutoff():
+    return (utc_now() - timedelta(days=RAW_RETENTION_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _purge(connection):
+    cleared = ", ".join(f"{column} = NULL" for column in RAW_COLUMNS)
+    with connection:
+        return connection.execute(f"UPDATE submissions SET {cleared} WHERE created_at < ? AND {RAW_HELD}",
+                                  (retention_cutoff(),)).rowcount
+
+
+def purge_expired():
+    """Clear raw columns of rows older than the retention period; statistics columns remain."""
+    connection = connect()
+    try:
+        return _purge(connection)
+    finally:
+        connection.close()
 
 
 def record_submission(raw_input, client, result=None, error_code=None):
@@ -312,13 +392,17 @@ def record_submission(raw_input, client, result=None, error_code=None):
         "summary": json.dumps(summary, ensure_ascii=False) if summary else None,
         "place": clean_name(place) if place else None,
         "sun_sign": summary and summary["sun"], "moon_sign": summary and summary["moon"], "asc_sign": summary and summary["asc"],
-        "fingerprint": summary and summary["fingerprint"], "consent": int(info["consent"]),
+        "fingerprint": summary and summary["fingerprint"], "consent": CONSENT_OPT_IN if info["consent"] else CONSENT_NONE,
         **{key: info[key] for key in UTM_KEYS}, "short_code": info["short_code"],
     }
+    if not info["consent"]:
+        row.update(dict.fromkeys(RAW_COLUMNS))
     columns = ", ".join(row)
     marks = ", ".join("?" for _ in row)
     connection = connect()
     try:
+        # Serverless has no scheduler, so each write also enforces retention (indexed on created_at).
+        _purge(connection)
         with connection:
             if is_postgres():
                 return connection.execute(f"INSERT INTO submissions ({columns}) VALUES ({marks}) RETURNING id",
@@ -364,6 +448,7 @@ def stats(date_from=None, date_to=None):
     ok = where(clauses + ["status = 'success'"])
     connection = connect()
     try:
+        _purge(connection)
         q = lambda sql, extra=(): [dict(r) for r in connection.execute(sql, [*params, *extra]).fetchall()]
         totals = q(f"""SELECT COUNT(*) AS submissions,
                         SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success,
@@ -401,6 +486,7 @@ def users(date_from=None, date_to=None, q=None, limit=200):
         params += [like(q), like(q)]
     connection = connect()
     try:
+        _purge(connection)
         rows = connection.execute(f"""
             SELECT s.visitor_id, COUNT(*) AS count, MIN(s.created_at) AS first_seen, MAX(s.created_at) AS last_seen,
                    SUM(CASE WHEN s.status = 'success' THEN 1 ELSE 0 END) AS success,
@@ -447,6 +533,7 @@ def list_submissions(visitor_id=None, q=None, status=None, date_from=None, date_
     offset = max(0, int(offset))
     connection = connect()
     try:
+        _purge(connection)
         total = connection.execute(f"SELECT COUNT(*) AS n FROM submissions{where(clauses)}", params).fetchone()["n"]
         rows = connection.execute(f"SELECT {LIST_COLUMNS} FROM submissions{where(clauses)} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
                                   [*params, limit, offset]).fetchall()
@@ -458,6 +545,7 @@ def list_submissions(visitor_id=None, q=None, status=None, date_from=None, date_
 def get_submission(submission_id):
     connection = connect()
     try:
+        _purge(connection)
         row = connection.execute(f"SELECT {LIST_COLUMNS}, raw_input, summary, fingerprint FROM submissions WHERE id = ?",
                                  (int(submission_id),)).fetchone()
     finally:
@@ -465,7 +553,7 @@ def get_submission(submission_id):
     if row is None:
         return None
     item = dict(row)
-    item["raw_input"] = json.loads(item["raw_input"])
+    item["raw_input"] = json.loads(item["raw_input"]) if item["raw_input"] else None
     item["summary"] = json.loads(item["summary"]) if item["summary"] else None
     return item
 
