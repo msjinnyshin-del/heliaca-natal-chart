@@ -1,7 +1,7 @@
 const BODIES = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto', 'NorthNode', 'SouthNode', 'Lilith', 'Chiron', 'Fortune', 'Spirit'];
 const ANGLES = ['ASC', 'MC', 'DSC', 'IC'];
 const SIGNS = ['양', '황소', '쌍둥이', '게', '사자', '처녀', '천칭', '전갈', '사수', '염소', '물병', '물고기'];
-const HOUSES = { P: 'Placidus', W: 'Whole Sign', E: 'Equal', K: 'Koch', O: 'Porphyry' };
+const HOUSES = { P: 'Placidus', W: 'Whole Sign', E: 'Equal', K: 'Koch', O: 'Porphyry', R: 'Regiomontanus', C: 'Campanus', B: 'Alcabitius' };
 
 function cell(value) {
   return String(value ?? '미제공').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -31,7 +31,9 @@ function aspectProfileSummary(profile) {
   const enabled = ['chiron', 'lilith', 'nodes', 'lots'].filter(key => profile.targets[key]);
   const angles = Array.isArray(profile.targets.angles) ? profile.targets.angles.join('/') : '';
   const orbs = Object.entries(profile.orbs).map(([key, value]) => `${key}≤${value}°`).join(', ');
-  return `${profile.version}; planets + ${[...enabled, angles].filter(Boolean).join(', ')}; ${orbs}`;
+  const minor = Array.isArray(profile.minor) && profile.minor.length ? `minor ${profile.minor.join(', ')}` : 'major only';
+  const scale = Number.isFinite(profile.orb_scale) ? `orb ×${profile.orb_scale}` : 'orb ×1';
+  return `${profile.version}; planets + ${[...enabled, angles].filter(Boolean).join(', ')}; ${orbs}; ${minor}; ${scale}`;
 }
 
 function validate(chart) {
@@ -65,7 +67,9 @@ const RULERS = [
   ['화성', '화성'], ['금성', '금성'], ['수성', '수성'], ['달', '달'], ['태양', '태양'], ['수성', '수성'],
   ['금성', '금성'], ['명왕성', '화성'], ['목성', '목성'], ['토성', '토성'], ['천왕성', '토성'], ['해왕성', '목성'],
 ];
-const ASPECT_KO = { Conjunction: '합(☌)', Opposition: '대립(☍)', Trine: '삼분(△)', Square: '사각(□)', Sextile: '육분(⚹)' };
+const ASPECT_KO = { Conjunction: '합(☌)', Opposition: '대립(☍)', Trine: '삼분(△)', Square: '사각(□)', Sextile: '육분(⚹)',
+  Quincunx: '퀸컹스(⚻, 부가)', SemiSquare: '세미스퀘어(∠, 부가)', Sesquiquadrate: '세스퀴쿼드레이트(⚼, 부가)', Quintile: '퀸타일(Q, 부가)' };
+const MINOR = new Set(['Quincunx', 'SemiSquare', 'Sesquiquadrate', 'Quintile']);
 
 /** Sort and count engine output only; nothing astronomical is derived here. */
 function interpretationCues(chart) {
@@ -198,7 +202,7 @@ export function buildInterpretationMarkdown(chart, { name = '' } = {}) {
       ['황도 / 좌표', `${s.zodiac} / geocentric apparent ecliptic of date`],
       ['하우스', HOUSES[s.house_system] || s.house_system],
       ['노드', s.node_mode === 'true' ? 'True Node (진노드)' : 'Mean Node (평균 노드)'],
-      ['Lilith', s.lilith_mode === 'mean' ? 'Mean Black Moon / 평균 월원점' : s.lilith_mode],
+      ['Lilith', s.lilith_mode === 'mean' ? 'Mean Black Moon / 평균 릴리스' : s.lilith_mode === 'osculating' ? 'Osculating Black Moon / 오스큘레이팅 릴리스' : s.lilith_mode],
       ['주야 (sect)', chart.sect === 'night' ? 'night / 야간' : 'day / 주간'],
       ['Fortune 공식', chart.sect === 'night' ? 'norm(ASC + Sun − Moon)' : 'norm(ASC + Moon − Sun)'],
       ['Spirit 공식', chart.sect === 'night' ? 'norm(ASC + Moon − Sun)' : 'norm(ASC + Sun − Moon)'],
@@ -217,9 +221,9 @@ export function buildInterpretationMarkdown(chart, { name = '' } = {}) {
     table(['각도', '사인 (원시)', '표시 위치', '황경 °'], chart.angles.map(p => [p.id, SIGNS[p.sign_index], p.position, number(p.longitude)])),
     '## 12하우스 커스프',
     table(['하우스', '표시 위치', '황경 °'], [...chart.houses].sort((a,b) => a.number-b.number).map(p => [p.number, p.position, number(p.longitude)])),
-    '## 주요 어스펙트',
-    '목록은 엔진이 반환한 프로필 관계만 포함합니다. 기본은 10행성 상호 및 10행성↔Chiron·Lilith·ASC·MC이며, Node와 Lot은 명시적으로 활성화한 경우에만 포함합니다. 추가 포인트끼리의 관계와 부가 어스펙트는 계산 범위 밖입니다.',
-    chart.aspects.length ? table(['천체 A', '천체 B', '어스펙트', '목표각 °', '실제 분리각 °', '오브 °', '허용 오브 °'], chart.aspects.map(a => [a.a, a.b, a.name, number(a.angle, 0), number(a.separation, 6), number(a.orb, 6), number(a.allowed_orb, 2)])) : '선택한 규칙에서 검출된 주요 어스펙트가 없습니다.',
+    '## 어스펙트',
+    `목록은 엔진이 반환한 프로필 관계만 포함합니다. 기본은 10행성 상호 및 10행성↔Chiron·Lilith·ASC·MC이며, Node와 Lot은 명시적으로 활성화한 경우에만 포함합니다. 추가 포인트끼리의 관계는 계산 범위 밖입니다. ${s.aspect_profile?.minor?.length ? `부가 어스펙트(${s.aspect_profile.minor.join(', ')})는 사용자가 선택해 포함했으며 주요 어스펙트보다 약하게 다루세요.` : '부가 어스펙트는 이번 설정에서 선택하지 않았습니다.'}`,
+    chart.aspects.length ? table(['천체 A', '천체 B', '어스펙트', '구분', '목표각 °', '실제 분리각 °', '오브 °', '허용 오브 °'], chart.aspects.map(a => [a.a, a.b, a.name, MINOR.has(a.name) ? '부가' : '주요', number(a.angle, 0), number(a.separation, 6), number(a.orb, 6), number(a.allowed_orb, 2)])) : '선택한 규칙에서 검출된 어스펙트가 없습니다.',
     '## 한계와 주의',
     '- 천문 계산의 정밀도는 점성술 해석의 과학적 타당성이나 출생 입력의 정확성을 보증하지 않습니다.\n- 미계산: dignity / Almuten Figuris / 차트 모양 및 패턴 / applying-separating / 현재 트랜짓과 프로그레션.\n- Spirit은 명시한 Lot 공식이며 특정 외부 앱의 기호와 동일하다고 단정하지 않습니다.',
     ...(chart.warnings?.length ? [chart.warnings.map(w => `- ${cell(w)}`).join('\n')] : []),

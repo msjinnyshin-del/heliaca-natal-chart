@@ -11,7 +11,7 @@ import {
   spreadLabelLongitudes,
 } from '../web/geometry.js';
 import { createRequestState, requestFingerprint } from '../web/request-state.js';
-import { aspectTimingLabel, buildWheelMetadata, formatWheelPosition, isUnknownTime, motionMarker, sensitivityNote, wheelAspects } from '../web/chart-profile.js';
+import { aspectTimingLabel, aspectTone, buildWheelMetadata, lilithLegend, formatWheelPosition, isUnknownTime, motionMarker, sensitivityNote, wheelAspects } from '../web/chart-profile.js';
 
 test('norm wraps longitudes into [0, 360)', () => {
   assert.equal(norm(360), 0);
@@ -158,4 +158,17 @@ test('24:00 is used only for an end on the next date', () => {
   assert.equal(aspectTimingLabel(sameDate, { repeatedHour: true }), '20:00(UTC+01:00)–00:00(UTC+00:00)에 태어난 경우만');
   const afterGap = { stability: 'partial', windows: [{ start_local: '1919-03-30T20:00:00', end_local: '1919-03-31T00:30:00' }] };
   assert.equal(aspectTimingLabel(afterGap), '20:00–다음 날 00:30에 태어난 경우만');
+});
+
+test('new house systems, Lilith variants and minor aspects are named on the wheel', () => {
+  for (const [code, name] of [['R', 'Regiomontanus'], ['C', 'Campanus'], ['B', 'Alcabitius']]) {
+    const lines = buildWheelMetadata({ input: {}, normalized: { latitude: 0, longitude: 0 }, settings: { house_system: code }, metadata: {} });
+    assert.match(lines[2], new RegExp(name));
+  }
+  assert.equal(lilithLegend({ settings: { lilith_mode: 'osculating' } }), '⚸ Osculating Lilith');
+  assert.equal(lilithLegend({ settings: { lilith_mode: 'mean' } }), '⚸ Mean Lilith');
+  assert.equal(aspectTone('Trine'), 'harmonic');
+  assert.equal(aspectTone('Square'), 'dynamic');
+  assert.equal(aspectTone('Quincunx'), 'minor');
+  assert.equal(aspectTone('Conjunction'), 'neutral');
 });

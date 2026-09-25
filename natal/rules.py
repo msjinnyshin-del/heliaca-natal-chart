@@ -6,22 +6,39 @@ from .errors import ChartError
 SIGNS = ("양", "황소", "쌍둥이", "게", "사자", "처녀", "천칭", "전갈", "사수", "염소", "물병", "물고기")
 PLANETS = ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto")
 ASPECTS = (("Conjunction", 0, 8), ("Sextile", 60, 4), ("Square", 90, 6), ("Trine", 120, 6), ("Opposition", 180, 8))
-ASPECT_PROFILE_VERSION = "major-v2"
+# Spec §6.1 minor aspects: opt-in, no luminary bonus, extra points capped at 2°.
+MINOR_ASPECTS = (("Quincunx", 150, 3), ("SemiSquare", 45, 2), ("Sesquiquadrate", 135, 2), ("Quintile", 72, 2))
+MINOR_NAMES = tuple(name for name, _, _ in MINOR_ASPECTS)
+MINOR_EXTRA_CAP = 2.0
+# Above 1.5x a pair could satisfy two aspects at once (Sextile/Quintile, Trine/Sesquiquadrate); keep a margin.
+ORB_SCALE_MIN, ORB_SCALE_MAX = 0.5, 1.4
+ASPECT_PROFILE_VERSION = "aspects-v3"
+LEGACY_PROFILE_VERSIONS = ("major-v2",)  # major-v2 == aspects-v3 without minor aspects at scale 1
 EXTRA_GROUPS = ("chiron", "lilith", "nodes", "lots", "angles")
 DEFAULT_ASPECT_PROFILE = {
     "version": ASPECT_PROFILE_VERSION,
     "targets": {"chiron": True, "lilith": True, "nodes": False, "lots": False, "angles": ["ASC", "MC"]},
     "orbs": {"chiron": 3.0, "lilith": 3.0, "nodes": 3.0, "lots": 3.0, "angles": 3.0},
+    "minor": [],
+    "orb_scale": 1.0,
 }
 
 
 def normalize_aspect_profile(value=None):
     if value is None:
         value = {}
-    if not isinstance(value, dict) or set(value) - {"version", "targets", "orbs"}:
-        raise ChartError("INVALID_INPUT", "aspect_profile은 version, targets, orbs 객체여야 합니다.")
-    if value.get("version", ASPECT_PROFILE_VERSION) != ASPECT_PROFILE_VERSION:
+    if not isinstance(value, dict) or set(value) - {"version", "targets", "orbs", "minor", "orb_scale"}:
+        raise ChartError("INVALID_INPUT", "aspect_profile은 version, targets, orbs, minor, orb_scale 객체여야 합니다.")
+    if value.get("version", ASPECT_PROFILE_VERSION) not in (ASPECT_PROFILE_VERSION, *LEGACY_PROFILE_VERSIONS):
         raise ChartError("INVALID_INPUT", f"지원하는 aspect profile은 {ASPECT_PROFILE_VERSION}입니다.")
+    if value.get("version") in LEGACY_PROFILE_VERSIONS and (value.get("minor", []) != [] or value.get("orb_scale", 1) != 1):
+        raise ChartError("INVALID_INPUT", "major-v2 프로필에는 minor와 orb_scale을 지정할 수 없습니다. aspects-v3를 사용하세요.")
+    minor = value.get("minor", [])
+    if (not isinstance(minor, list) or any(item not in MINOR_NAMES for item in minor) or len(set(minor)) != len(minor)):
+        raise ChartError("INVALID_INPUT", f"minor 어스펙트는 {', '.join(MINOR_NAMES)} 중 중복 없는 배열이어야 합니다.")
+    scale = value.get("orb_scale", 1.0)
+    if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not math.isfinite(scale) or not ORB_SCALE_MIN <= scale <= ORB_SCALE_MAX:
+        raise ChartError("INVALID_INPUT", f"orb_scale은 {ORB_SCALE_MIN}–{ORB_SCALE_MAX} 사이의 수여야 합니다.")
     raw_targets = value.get("targets", {})
     raw_orbs = value.get("orbs", {})
     if not isinstance(raw_targets, dict) or set(raw_targets) - set(EXTRA_GROUPS):
@@ -45,7 +62,8 @@ def normalize_aspect_profile(value=None):
         if isinstance(orb, bool) or not isinstance(orb, (int, float)) or not math.isfinite(orb) or not 0 <= orb <= 3:
             raise ChartError("INVALID_INPUT", f"{group} aspect orb는 0 이상 3 이하의 유한한 수여야 합니다.")
         orbs[group] = float(orb)
-    return {"version": ASPECT_PROFILE_VERSION, "targets": targets, "orbs": orbs}
+    return {"version": ASPECT_PROFILE_VERSION, "targets": targets, "orbs": orbs,
+            "minor": [name for name in MINOR_NAMES if name in minor], "orb_scale": float(scale)}
 
 
 def position(longitude):
@@ -93,10 +111,17 @@ def aspect_candidates(bodies, angles, profile):
     for i, a in enumerate(planets):
         pairs.extend((a, b, "planets") for b in planets[i + 1:])
         pairs.extend((a, b, group) for b, group in extras)
+    scale = profile["orb_scale"]
+    minors = [aspect for aspect in MINOR_ASPECTS if aspect[0] in profile["minor"]]
     for a, b, group in pairs:
+        luminary = a["id"] in ("Sun", "Moon") or b["id"] in ("Sun", "Moon")
         for name, target, base_orb in ASPECTS:
-            allowed = (base_orb + (2 if a["id"] in ("Sun", "Moon") or b["id"] in ("Sun", "Moon") else 0)
-                       if group == "planets" else min(base_orb, profile["orbs"][group]))
+            allowed = ((base_orb + (2 if luminary else 0)) * scale
+                       if group == "planets" else min(base_orb * scale, profile["orbs"][group]))
+            output.append((a, b, group, name, target, allowed))
+        for name, target, base_orb in minors:
+            allowed = (base_orb * scale if group == "planets"
+                       else min(base_orb * scale, profile["orbs"][group], MINOR_EXTRA_CAP))
             output.append((a, b, group, name, target, allowed))
     return output
 

@@ -123,7 +123,7 @@ class EngineAcceptance(unittest.TestCase):
         from natal.engine import calculate_chart
         chart = calculate_chart(REFERENCE)
         settings = chart["settings"]
-        self.assertEqual(settings["aspect_rule"], "major-v2")
+        self.assertEqual(settings["aspect_rule"], "aspects-v3")
         self.assertEqual(settings["aspect_profile"]["targets"], {
             "chiron": True, "lilith": True, "nodes": False, "lots": False,
             "angles": ["ASC", "MC"],
@@ -135,7 +135,7 @@ class EngineAcceptance(unittest.TestCase):
             ("Moon", "ASC", "Trine"), ("Mercury", "ASC", "Opposition"),
             ("Venus", "MC", "Opposition"), ("Saturn", "ASC", "Square"),
         ])
-        self.assertTrue(all(item["profile_version"] == "major-v2" for item in chart["aspects"]))
+        self.assertTrue(all(item["profile_version"] == "aspects-v3" for item in chart["aspects"]))
 
     def test_optional_aspect_targets_are_explicit_and_north_node_only(self):
         from natal.engine import calculate_chart
@@ -149,7 +149,8 @@ class EngineAcceptance(unittest.TestCase):
         self.assertTrue(all(a["orb"] <= 3 for a in chart["aspects"] if a["b"] == "NorthNode"))
         self.assertNotIn("SouthNode", target_ids)
         self.assertTrue(target_ids & {"Fortune", "Spirit"})
-        self.assertEqual(chart["input"]["aspect_profile"], profile)
+        # Recorded normalized: legacy major-v2 is upgraded to aspects-v3 with no minor aspects at scale 1.
+        self.assertEqual(chart["input"]["aspect_profile"], {**profile, "version": "aspects-v3", "minor": [], "orb_scale": 1.0})
         # Positive case: 1980-03-15 has Mars conjunct North Node within 3 deg; South Node never becomes a target.
         other = calculate_chart({**REFERENCE, "date": "1980-03-15", "aspect_profile": profile})
         node_aspects = [(a["a"], a["b"], a["name"]) for a in other["aspects"] if "Node" in a["a"] or "Node" in a["b"]]

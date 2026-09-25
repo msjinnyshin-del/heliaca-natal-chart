@@ -104,6 +104,9 @@ def normalize_location_source(payload, latitude, longitude, timezone_name):
 
 
 UNKNOWN_EXCLUDED = ["ASC", "MC", "DSC", "IC", "houses", "Fortune", "Spirit", "sect"]
+# Placidus, Whole Sign, Equal, Koch, Porphyry, Regiomontanus, Campanus, Alcabitius (Swiss one-letter codes).
+HOUSE_SYSTEMS = ("P", "W", "E", "K", "O", "R", "C", "B")
+LILITH_MODES = {"mean": ("평균 릴리스", swe.MEAN_APOG), "osculating": ("오스큘레이팅 릴리스", swe.OSCU_APOG)}
 
 
 def calculate_chart(payload, allow_future=False, require_known_time=False):
@@ -117,8 +120,10 @@ def calculate_chart(payload, allow_future=False, require_known_time=False):
     unknown = accuracy == "unknown"
     latitude, longitude = coordinate(payload, "latitude", 90), coordinate(payload, "longitude", 180)
     house_system, node_mode = payload.get("house_system", "P"), payload.get("node_mode", "true")
-    if house_system not in ("P", "W", "E", "K", "O") or node_mode not in ("true", "mean"):
-        raise ChartError("INVALID_INPUT", "지원하지 않는 하우스 또는 Node 설정입니다.")
+    lilith_mode = payload.get("lilith_mode", "mean")
+    if (house_system not in HOUSE_SYSTEMS or node_mode not in ("true", "mean")
+            or not isinstance(lilith_mode, str) or lilith_mode not in LILITH_MODES):
+        raise ChartError("INVALID_INPUT", "지원하지 않는 하우스, Node 또는 Lilith 설정입니다.")
     aspect_profile = normalize_aspect_profile(payload.get("aspect_profile"))
     solar_payload, calendar_conversion = convert_calendar(payload)
     if unknown:
@@ -154,7 +159,7 @@ def calculate_chart(payload, allow_future=False, require_known_time=False):
         obliquity = swe.calc(jd_tt, swe.ECL_NUT, 0)[0][0]
         bodies = []
         definitions = BODY_DEFS + (("NorthNode", "북노드", "☊", swe.TRUE_NODE if node_mode == "true" else swe.MEAN_NODE),
-                                   ("Lilith", "평균 릴리스", "⚸", swe.MEAN_APOG), ("Chiron", "키론", "⚷", swe.CHIRON))
+                                   ("Lilith", LILITH_MODES[lilith_mode][0], "⚸", LILITH_MODES[lilith_mode][1]), ("Chiron", "키론", "⚷", swe.CHIRON))
         def make_body(body_id, name, symbol, values, returned):
             lon, lat, distance, speed = values[:4]
             equatorial = swe.cotrans((lon, lat, distance), -obliquity)
@@ -208,12 +213,12 @@ def calculate_chart(payload, allow_future=False, require_known_time=False):
             item = next(item for item in manifest["files"] if item["name"] == filename)
             used_data.append({**item, "start_jd": start, "end_jd": end, "denum": denum})
     # Preserve only contract fields; an optional name is never needed by the engine.
-    original = {key: payload[key] for key in ("date", "time", "timezone", "latitude", "longitude", "place", "house_system", "node_mode", "time_accuracy", "fold", "calendar", "lunar_leap") if key in payload}
+    original = {key: payload[key] for key in ("date", "time", "timezone", "latitude", "longitude", "place", "house_system", "node_mode", "lilith_mode", "time_accuracy", "fold", "calendar", "lunar_leap") if key in payload}
     original["aspect_profile"] = aspect_profile
     original["location_source"] = location_source
-    settings = {"house_system": house_system, "node_mode": node_mode, "lilith_mode": "mean", "zodiac": "tropical", "rounding": "nearest_second",
+    settings = {"house_system": house_system, "node_mode": node_mode, "lilith_mode": lilith_mode, "zodiac": "tropical", "rounding": "nearest_second",
                 "house_assignment": "longitude-cusp-half-open-v1", "sect_rule": "geocentric-geometric-sun-center-altitude>=0",
-                "aspect_rule": "major-v2", "aspect_profile": aspect_profile}
+                "aspect_rule": aspect_profile["version"], "aspect_profile": aspect_profile}
     if unknown:
         settings["unknown_time_rule"] = UNKNOWN_RULE_VERSION
     fingerprint = hashlib.sha256(json.dumps({"utc": utc.isoformat(), "latitude": latitude, "longitude": longitude, "settings": settings,

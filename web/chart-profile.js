@@ -1,6 +1,17 @@
 const SIGN_GLYPHS = ['♈︎', '♉︎', '♊︎', '♋︎', '♌︎', '♍︎', '♎︎', '♏︎', '♐︎', '♑︎', '♒︎', '♓︎'];
 const SIGN_NAMES = ['양', '황소', '쌍둥이', '게', '사자', '처녀', '천칭', '전갈', '사수', '염소', '물병', '물고기'];
-const HOUSE_NAMES = { P: 'Placidus', W: 'Whole Sign', E: 'Equal', K: 'Koch', O: 'Porphyry' };
+export const HOUSE_NAMES = { P: 'Placidus', W: 'Whole Sign', E: 'Equal', K: 'Koch', O: 'Porphyry', R: 'Regiomontanus', C: 'Campanus', B: 'Alcabitius' };
+const HARMONIC = new Set(['Trine', 'Sextile']);
+const DYNAMIC = new Set(['Square', 'Opposition']);
+const MINOR = new Set(['Quincunx', 'SemiSquare', 'Sesquiquadrate', 'Quintile']);
+
+export function aspectTone(name) {
+  return HARMONIC.has(name) ? 'harmonic' : DYNAMIC.has(name) ? 'dynamic' : MINOR.has(name) ? 'minor' : 'neutral';
+}
+
+export function lilithLegend(result) {
+  return result?.settings?.lilith_mode === 'osculating' ? '⚸ Osculating Lilith' : '⚸ Mean Lilith';
+}
 
 export function isUnknownTime(result) {
   return result?.normalized?.time_accuracy === 'unknown';

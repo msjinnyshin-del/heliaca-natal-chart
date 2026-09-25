@@ -37,6 +37,7 @@ python3 -m venv .venv
 ## 이용 범위
 
 - 양력(또는 한국 음력) 생년월일과 **알려진 현지 출생 시각**, 정밀 경위도, IANA 시간대를 입력한다. 시각을 모르면 **생시 모름**을 선택한다(아래). 기본 Tropical / geocentric / Placidus / True Node / Mean Black Moon Lilith.
+- 하우스: Placidus·Koch·Porphyry·Whole Sign·Equal·Regiomontanus·Campanus·Alcabitius. Lilith: Mean(기본)·Osculating. 어스펙트 규칙 `aspects-v3`: 주요 5종 기본, 부가 어스펙트(Quincunx 3°, Semi-square·Sesquiquadrate·Quintile 2°)는 선택, 오브 배율 50–140%(`orb_scale` 0.5–1.4; 1.5배 이상은 어스펙트 범위가 겹쳐 제한). 컴포지트는 두 차트의 하우스·노드·릴리스·어스펙트 설정이 같아야 한다.
 - 초 단위 출력은 입력값보다 정밀한 출생기록을 보증하지 않는다. 기준 비교 프로필은 최근접 초 반올림이며 원시 좌표는 보존한다.
 - 1900년부터 오늘까지 입력할 수 있다. 1970년 이전은 IANA 역사 시간대 기록(예: 한국 1954–61년 UTC+8:30, 서머타임)을 적용하고, 적용한 오프셋과 확인 경고를 결과에 표시한다. 추정 시각(오차 구간)은 지원하지 않는다.
 - **생시 미상**(`time_accuracy: "unknown"`, `time` 없음, 규칙 `unknown-day-scan-v1`, `natal/unknown_time.py`): 현지 정오를 대표 시각으로 명시하고, ASC·MC·DSC·IC·하우스·Fortune·Spirit·주야는 계산하지 않는다. 해당 현지 날짜 전체(23/25시간 DST 날 포함)를 10분 간격으로 표본화하고 경계는 이분 탐색(1초 미만), 표본 사이의 짧은 오브 진입·이탈은 극값 보정으로 찾는다. 천체별 사인 진입·정지 시각과 어스펙트별 `stability`(`stable` 하루 종일 / `partial` 일부 시간대)·`windows`를 반환하며, 휠에는 `stable` 어스펙트만 그린다. 천체별 하루 시작·끝 위치(`time_sensitivity.range`)도 함께 준다. 오브를 0°로 둔 추가점은 정확히 맞는 순간만 해당하므로 스캔에서 잡히지 않는다. 존재하지 않는 현지 날짜(예: Pacific/Apia 2011-12-30)와 하루 전체가 지나지 않은 날짜는 거절하고, 시너스트리·컴포지트·트랜짓과 해석용 MD 복사는 출생 시각이 필요하다.

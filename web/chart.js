@@ -1,5 +1,5 @@
 import { annularSector, circularMidpoint, polarPoint, staggerLabels } from './geometry.js';
-import { buildWheelMetadata, formatWheelPosition, isUnknownTime, wheelAspects } from './chart-profile.js';
+import { aspectTone, buildWheelMetadata, formatWheelPosition, isUnknownTime, lilithLegend, wheelAspects } from './chart-profile.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const SIGNS = [
@@ -8,8 +8,6 @@ const SIGNS = [
   ['사수', '♐︎'], ['염소', '♑︎'], ['물병', '♒︎'], ['물고기', '♓︎'],
 ];
 const SECTOR_COLORS = ['#2d3428', '#363126', '#283a32', '#173f3a', '#193c3c', '#273b35', '#2d343a', '#342e39', '#3c2e2d', '#302f3b', '#213740', '#263a30'];
-const HARMONIC = new Set(['Trine', 'Sextile']);
-const DYNAMIC = new Set(['Square', 'Opposition']);
 
 function el(name, attributes = {}, text = '') {
   const node = document.createElementNS(NS, name);
@@ -78,8 +76,7 @@ export function createNatalWheel(result) {
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
     const from = polarPoint(a, asc, 360, 360, 118);
     const to = polarPoint(b, asc, 360, 360, 118);
-    const tone = HARMONIC.has(aspect.name) ? 'harmonic' : DYNAMIC.has(aspect.name) ? 'dynamic' : 'neutral';
-    drawLine(group, from, to, `wheel-aspect ${tone}`);
+    drawLine(group, from, to, `wheel-aspect ${aspectTone(aspect.name)}`);
   }
 
   const displayBodies = result.bodies.filter((body) => Number.isFinite(body.longitude));
@@ -115,8 +112,8 @@ export function createNatalWheel(result) {
   });
   band.append(el('text', { x: 680, y: 780, class: 'wheel-legend', fill: '#d6ece7', 'font-size': '8',
     'font-family': 'monospace', 'text-anchor': 'end' }, unknown
-    ? '생시 미상 · 정오 대표 위치 · ⚸ Mean Lilith · R retrograde · S near-station'
-    : '⊗ Fortune · ◇ Spirit · ⚸ Mean Lilith · R retrograde · S near-station'));
+    ? `생시 미상 · 정오 대표 위치 · ${lilithLegend(result)} · R retrograde · S near-station`
+    : `⊗ Fortune · ◇ Spirit · ${lilithLegend(result)} · R retrograde · S near-station`));
   svg.append(band);
   return svg;
 }

@@ -92,7 +92,7 @@ Reported 모드의 완성 네이털 결과에는 아래 항목을 모두 포함�
 | DSC, IC | 각각 ASC·MC의 대척 황경 |
 | North / South Node | 선택한 종류의 North와 대척 South; 서로 다른 node 종류를 섞지 않음 |
 | Chiron | 별도 소천체로 구분하고 데이터 가용성을 검증 |
-| Lilith | Mean lunar apogee 기본; Osculating/Interpolated는 지원 시 별도 이름. 소행성 1181 Lilith와 구분 |
+| Lilith | Mean lunar apogee 기본; Osculating(`lilith_mode: osculating`, "오스큘레이팅 릴리스")을 별도 이름으로 지원(2026-09-25). Interpolated는 미지원. 소행성 1181 Lilith와 구분 |
 | Part of Fortune | §5의 주야 공식과 사용한 sect |
 | 12 cusps | 번호 1–12와 사인·도수·원시 황경 |
 | Aspects / Dignities | §6–7의 규칙과 판정 근거 |
@@ -106,6 +106,7 @@ Reported 모드의 완성 네이털 결과에는 아래 항목을 모두 포함�
 ## 5. 하우스, 주야, Part of Fortune
 
 - Placidus, Koch, Porphyry, Whole Sign, Equal의 엔진 코드와 결과 배열 인덱스를 adapter에서 확인한다. Equal은 ASC 도수에서 시작하는 방식으로 정의한다.
+- 추가(2026-09-25): Regiomontanus(R, 천구 적도 등분), Campanus(C, 주수직권 등분), Alcabitius(B, ASC 반호 3등분 후 적경 투영). 세 시스템의 11·12·2·3 커스프는 RAMC·진황도경사·위도로 쓴 닫힌 식과 1″ 이내로 대조한다. 고위도에서 커스프 순서가 역전되면 (예: 80°N의 R/C) 기존 순서 검사로 `HOUSE_SYSTEM_UNAVAILABLE`을 반환한다. ASC는 지평선 위의 점이므로 Alcabitius의 반호는 항상 정의된다.
 - Whole Sign의 1하우스 시작은 ASC 사인의 0°이고 ASC 도수는 별도로 보존한다. Equal의 1하우스 커스프는 ASC 도수와 같다. 두 시스템 모두 MC는 독립 각도점이므로 10하우스 커스프로 덮어쓰지 않는다.
 - 하우스 실패를 반환 코드로 검사한다. 극지 Placidus/Koch의 자동 Porphyry 결과는 요청 시스템의 성공 결과가 아니다. 사용자가 지원되는 대안을 선택하면 새 설정으로 계산한다. 모든 위도에서 모든 시스템이 가능하다고 가정하지 않는다. [S1 §15–16]
 - 기본 행성 하우스는 황경을 cusp i부터 다음 cusp 직전까지의 순환 구간 `[cusp_i, cusp_next)`에 배정한다. cusp와 정확히 같으면 해당 하우스다. 12→1의 0° 경계를 처리하고 각 천체가 정확히 한 구간에 속하는지 검사한다.
@@ -127,6 +128,8 @@ Reported 모드의 완성 네이털 결과에는 아래 항목을 모두 포함�
 | Sextile | 60° | 4° |
 | Quincunx | 150° | 3°, 요청 시 목록 표시; Yod 판정에는 내부적으로 사용 |
 | Semi-square / Sesquiquadrate / Quintile | 45° / 135° / 72° | 2°, 요청 시 |
+
+구현(2026-09-25, 규칙 `aspects-v3`): 부가 어스펙트는 `aspect_profile.minor`로 선택하며 Luminary 가산이 없다. `orb_scale`(0.5–1.4, 기본 1)은 10행성 쌍의 기본 오브(가산 포함)와 추가점의 기본 오브에 곱하고, 추가점의 사용자 상한(≤3°)과 부가 상한(2°)은 그대로 적용한다. 1.5배 이상에서는 Sextile/Quintile, Trine/Sesquiquadrate의 허용 범위가 겹쳐 한 쌍이 두 어스펙트를 동시에 만족할 수 있으므로 상한을 1.4로 둔다(테스트로 모든 범위의 비중첩을 검사). 표에 없는 Biquintile(144°)은 제공하지 않는다. 이전 `major-v2` 프로필은 부가 없음·배율 1의 `aspects-v3`로 정규화되어 같은 결과를 내며, `major-v2`에 minor·orb_scale을 함께 보내면 거절한다. 컴포지트는 두 차트의 하우스·노드·Lilith·어스펙트 설정이 다르면 미드포인트를 만들지 않는다.
 
 원안에서 비어 있던 목성 이후 행성 규칙을 위와 같이 10행성 공통값으로 명시한다. Sun 또는 Moon이 한쪽 이상인 **주요** 어스펙트는 +2°를 한 번만 더한다. Sun–Moon에도 +4°로 누적하지 않는다.
 

@@ -135,10 +135,13 @@ function getPayload() {
     place: byName('place').value.trim(),
     house_system: byName('house_system').value,
     node_mode: byName('node_mode').value,
+    lilith_mode: byName('lilith_mode').value,
     time_accuracy: timeUnknown() ? 'unknown' : 'reported',
     location_source: placeSearch.source(),
     aspect_profile: {
-      version: 'major-v2',
+      version: 'aspects-v3',
+      minor: [...form.querySelectorAll('input[name="minor_aspect"]:checked')].map((input) => input.value),
+      orb_scale: Number(byName('orb_scale').value),
       targets: {
         chiron: byName('aspect_chiron').checked, lilith: byName('aspect_lilith').checked,
         nodes: byName('aspect_nodes').checked, lots: byName('aspect_lots').checked,
