@@ -257,7 +257,7 @@ class UtmHttpTests(unittest.TestCase):
         link = self.setup_links(cookie)
         status, headers, _ = self.request("GET", f"/l/{link['code']}", headers={"User-Agent": HUMAN_UA})
         query = parse_qs(urlsplit(headers["location"]).query)
-        client = {"visitor_id": "visitorAAAAAAAAAAAAAA", "name": "테스트", "consent": True,
+        client = {"visitor_id": "visitorAAAAAAAAAAAAAA", "name": "테스트", "store_consent": True,
                   "utm": {k: v[0] for k, v in query.items() if k.startswith("utm_")}, "short_code": query["sc"][0]}
         self.assertEqual(self.chart(CHART, client)[0], 200)
         status, _, data = self.admin("GET", "/api/admin/utm/links", cookie)

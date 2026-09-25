@@ -48,7 +48,7 @@ def calculate_transits(payload):
     moment = payload["moment"]
     if not isinstance(moment, dict) or set(moment) - {"date", "time", "timezone"}:
         raise ChartError("INVALID_INPUT", "moment는 date, time, timezone만 가질 수 있습니다.")
-    natal = calculate_chart(payload["natal"])
+    natal = calculate_chart(payload["natal"], require_known_time=True)
     # Ambiguous DST moments resolve to the earlier offset (fold 0); a transit moment is not a birth record.
     sky_input = {"fold": 0, **moment, "latitude": natal["normalized"]["latitude"], "longitude": natal["normalized"]["longitude"],
                  "place": "transit", "house_system": natal["settings"]["house_system"], "node_mode": natal["settings"]["node_mode"]}

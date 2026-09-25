@@ -175,7 +175,7 @@ class AdminTests(unittest.TestCase):
     # ---- recording ------------------------------------------------------------
 
     def test_success_is_recorded_and_client_never_reaches_result(self):
-        client = {"visitor_id": VISITOR, "name": "가상인물", "consent": True, "utm": {"utm_source": "threads", "utm_campaign": "launch"}, "short_code": "abc234"}
+        client = {"visitor_id": VISITOR, "name": "가상인물", "store_consent": True, "utm": {"utm_source": "threads", "utm_campaign": "launch"}, "short_code": "abc234"}
         status, _, raw_with = self.chart(client=client)
         self.assertEqual(status, 200)
         status, _, raw_without = self.chart()
@@ -187,7 +187,7 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         item = store.get_submission(rows[-1]["id"])
         self.assertEqual(item["raw_input"], CHART)
-        self.assertEqual((item["visitor_id"], item["display_name"], item["status"], item["consent"]), (VISITOR, "가상인물", "success", 1))
+        self.assertEqual((item["visitor_id"], item["display_name"], item["status"], item["consent"]), (VISITOR, "가상인물", "success", store.CONSENT_OPT_IN))
         self.assertEqual((item["utm_source"], item["utm_campaign"], item["short_code"]), ("threads", "launch", "abc234"))
         self.assertEqual(item["summary"]["fingerprint"], with_client["metadata"]["input_fingerprint"])
         self.assertEqual((item["sun_sign"], item["moon_sign"]), ("게", "쌍둥이"))
@@ -213,13 +213,41 @@ class AdminTests(unittest.TestCase):
             status, _, _ = self.chart()
         self.assertEqual(status, 200)
 
+    def test_chart_without_consent_stores_no_birth_input(self):
+        status, _, _ = self.chart(client={"visitor_id": VISITOR, "name": "가상인물", "utm": {"utm_source": "threads"}})
+        self.assertEqual(status, 200)
+        item = store.get_submission(store.list_submissions()["submissions"][0]["id"])
+        self.assertEqual((item["raw_input"], item["display_name"], item["place"], item["consent"]), (None, None, None, 0))
+        self.assertEqual((item["visitor_id"], item["sun_sign"], item["utm_source"]), (VISITOR, "게", "threads"))
+        cookie = self.login()
+        status, _, body = self.admin("GET", f"/api/admin/submissions/{item['id']}/chart", cookie)
+        self.assertEqual((status, body["error"]["code"]), (409, "RAW_INPUT_NOT_STORED"))
+
+    def test_visitor_can_delete_own_records(self):
+        self.chart(client={"visitor_id": VISITOR, "store_consent": True})
+        self.chart(client={"visitor_id": VISITOR})
+        self.chart(client={"visitor_id": "visitorBBBBBBBBBBBBBB", "store_consent": True})
+        status, _, raw = self.request("POST", "/api/my-data/delete", {"visitor_id": VISITOR}, {"Origin": self.origin})
+        self.assertEqual((status, json.loads(raw)), (200, {"deleted": 2}))
+        self.assertEqual([r["visitor_id"] for r in store.list_submissions()["submissions"]], ["visitorBBBBBBBBBBBBBB"])
+        status, _, raw = self.request("POST", "/api/my-data/delete", {"visitor_id": VISITOR}, {"Origin": self.origin})
+        self.assertEqual((status, json.loads(raw)), (200, {"deleted": 0}))
+        for body in ({"visitor_id": "%"}, {"visitor_id": None}, {}, {"visitor_id": ["x" * 20]}):
+            with self.subTest(body=body):
+                status, _, raw = self.request("POST", "/api/my-data/delete", body, {"Origin": self.origin})
+                self.assertEqual((status, json.loads(raw)["error"]["code"]), (400, "INVALID_VISITOR"))
+        status, _, _ = self.request("POST", "/api/my-data/delete", {"visitor_id": "visitorBBBBBBBBBBBBBB"},
+                                    {"Origin": "https://attacker.example"})
+        self.assertEqual(status, 403)
+        self.assertEqual(store.list_submissions()["total"], 1)
+
     # ---- admin API ------------------------------------------------------------
 
     def test_stats_users_submissions_detail_chart_and_delete(self):
         cookie = self.login()
-        self.chart(client={"visitor_id": VISITOR, "name": "A"})
-        self.chart(client={"visitor_id": VISITOR, "name": "B"})
-        self.chart({**CHART, "latitude": 91}, {"visitor_id": "visitorBBBBBBBBBBBBBB"})
+        self.chart(client={"visitor_id": VISITOR, "name": "A", "store_consent": True})
+        self.chart(client={"visitor_id": VISITOR, "name": "B", "store_consent": True})
+        self.chart({**CHART, "latitude": 91}, {"visitor_id": "visitorBBBBBBBBBBBBBB", "store_consent": True})
         status, _, stats = self.admin("GET", "/api/admin/stats", cookie)
         self.assertEqual(status, 200)
         self.assertEqual(stats["totals"], {"submissions": 3, "success": 2, "failed": 1, "unique_visitors": 2, "unique_names": 2})

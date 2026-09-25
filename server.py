@@ -262,6 +262,9 @@ class ChartHandler(BaseHTTPRequestHandler):
         if route.startswith("/api/share/") and route.endswith("/delete"):
             self.share_delete(route[len("/api/share/"):-len("/delete")])
             return
+        if route == "/api/my-data/delete":
+            self.my_data_delete()
+            return
         if route != "/api/chart":
             self.error_json(404, "NOT_FOUND", "요청 경로를 찾을 수 없습니다.")
             return
@@ -377,6 +380,23 @@ class ChartHandler(BaseHTTPRequestHandler):
             self.error_json(404, "SHARE_NOT_FOUND", "삭제할 링크가 없거나 삭제 키가 맞지 않습니다.")
             return
         self.send_json(200, {"deleted": True})
+
+    def my_data_delete(self):
+        """Self-service deletion: the browser's random visitor id acts as the (delete-only) key to its own rows."""
+        payload = self.json_body()
+        if payload is None:
+            return
+        from natal import store
+        visitor_id = store.clean_visitor_id(payload.get("visitor_id"))
+        if visitor_id is None:
+            self.error_json(400, "INVALID_VISITOR", "삭제할 브라우저 식별자가 올바르지 않습니다.")
+            return
+        try:
+            deleted = store.delete_visitor(visitor_id)
+        except Exception:
+            self.error_json(503, "STORE_UNAVAILABLE", "저장소를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.")
+            return
+        self.send_json(200, {"deleted": deleted})
 
     @staticmethod
     def record(payload, client, result=None, error_code=None):
@@ -508,6 +528,8 @@ class ChartHandler(BaseHTTPRequestHandler):
                     self.error_json(404, "NOT_FOUND", "입력 기록을 찾을 수 없습니다.")
                 elif len(parts) == 4:
                     self.send_json(200, item)
+                elif item["raw_input"] is None:
+                    self.error_json(409, "RAW_INPUT_NOT_STORED", "원문을 저장하지 않았거나(비동의) 보관 기간이 지나 재계산할 수 없습니다.")
                 else:
                     try:
                         # Recomputed on demand from the stored raw input; never cached.

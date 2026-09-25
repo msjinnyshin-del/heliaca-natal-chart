@@ -1,4 +1,5 @@
 """SQLite submission store: migrations, validation, aggregation and deletion."""
+from datetime import datetime, timezone
 import json
 import os
 import sqlite3
@@ -27,10 +28,16 @@ class StoreTests(unittest.TestCase):
         env = patch.dict(os.environ, {"NATAL_DB_PATH": self.path})
         env.start()
         self.addCleanup(env.stop)
+        # Retention is judged against a fixed clock so dated fixtures never expire as real time passes.
+        clock = patch.object(store, "utc_now", return_value=datetime(2026, 9, 20, 10, 0, 0, tzinfo=timezone.utc))
+        clock.start()
+        self.addCleanup(clock.stop)
 
     def record(self, client=None, result=RESULT, error_code=None, created_at=None, raw=RAW):
+        # Most tests exercise stored rows, so the helper opts in unless the client says otherwise.
+        client = {"store_consent": True, **(client or {})}
         with patch.object(store, "now_iso", return_value=created_at or "2026-09-20T10:00:00Z"):
-            return store.record_submission(dict(raw), client or {}, result=result if error_code is None else None, error_code=error_code)
+            return store.record_submission(dict(raw), client, result=result if error_code is None else None, error_code=error_code)
 
     def test_migration_sets_user_version_and_wal(self):
         self.record()
@@ -40,12 +47,12 @@ class StoreTests(unittest.TestCase):
         connection.close()
 
     def test_success_row_keeps_full_raw_input_and_summary(self):
-        row_id = self.record({"visitor_id": VISITOR_A, "name": " 가상인물 ", "consent": True,
+        row_id = self.record({"visitor_id": VISITOR_A, "name": " 가상인물 ", "store_consent": True,
                               "utm": {"utm_source": "instagram", "utm_campaign": "가을_런칭"}, "short_code": "abc234"})
         item = store.get_submission(row_id)
         self.assertEqual(item["raw_input"], RAW)
         self.assertEqual(item["display_name"], "가상인물")
-        self.assertEqual((item["status"], item["error_code"], item["consent"]), ("success", None, 1))
+        self.assertEqual((item["status"], item["error_code"], item["consent"]), ("success", None, store.CONSENT_OPT_IN))
         self.assertEqual((item["sun_sign"], item["moon_sign"], item["asc_sign"]), ("게", "쌍둥이", "물병"))
         self.assertEqual(item["summary"]["fingerprint"], "abc123")
         self.assertEqual((item["utm_source"], item["utm_campaign"], item["short_code"]), ("instagram", "가을_런칭", "abc234"))
@@ -140,10 +147,127 @@ class StoreTests(unittest.TestCase):
         with self.assertRaises(store.StoreError):
             store.delete_visitor("%")
 
+    def test_unknown_time_summary_keeps_only_whole_day_signs(self):
+        result = {"calculation_status": "success", "sect": None,
+                  "normalized": {"utc": "1990-05-01T03:00:00Z", "time_accuracy": "unknown"},
+                  "bodies": [{"id": "Sun", "sign_index": 1, "position": "황소 10°", "time_sensitivity": {"sign_stable": True}},
+                             {"id": "Moon", "sign_index": 4, "position": "사자 01°", "time_sensitivity": {"sign_stable": False}}],
+                  "angles": [], "metadata": {"input_fingerprint": "f"}}
+        item = store.get_submission(self.record(result=result))
+        self.assertEqual((item["sun_sign"], item["moon_sign"], item["asc_sign"]), ("황소", None, None))
+        self.assertEqual((item["summary"]["time_accuracy"], item["summary"]["utc"], item["summary"]["moon_position"]),
+                         ("unknown", None, None))
+
     def test_raw_input_round_trips_as_json(self):
         raw = {**RAW, "aspect_profile": {"version": "major-v2"}, "location_source": {"mode": "manual"}}
         item = store.get_submission(self.record(raw=raw))
         self.assertEqual(item["raw_input"], json.loads(json.dumps(raw)))
+
+    # ---- consent and retention (spec §12) ---------------------------------------
+
+    def test_without_consent_only_statistics_are_kept(self):
+        for consent in (False, None, "yes", 1):
+            with self.subTest(consent=consent):
+                client = {"visitor_id": VISITOR_A, "name": "가상인물", "utm": {"utm_source": "threads"}, "short_code": "abc234"}
+                if consent is not None:
+                    client["store_consent"] = consent
+                with patch.object(store, "now_iso", return_value="2026-09-20T10:00:00Z"):
+                    row_id = store.record_submission(dict(RAW), client, result=RESULT)
+                item = store.get_submission(row_id)
+                self.assertIsNone(item["raw_input"])
+                self.assertEqual((item["display_name"], item["place"], item["summary"], item["fingerprint"], item["consent"]),
+                                 (None, None, None, None, 0))
+                self.assertEqual((item["visitor_id"], item["status"], item["sun_sign"], item["moon_sign"], item["asc_sign"]),
+                                 (VISITOR_A, "success", "게", "쌍둥이", "물병"))
+                self.assertEqual((item["utm_source"], item["short_code"]), ("threads", "abc234"))
+
+    def test_failed_request_without_consent_keeps_no_raw_input(self):
+        with patch.object(store, "now_iso", return_value="2026-09-20T10:00:00Z"):
+            row_id = store.record_submission(dict(RAW), {"visitor_id": VISITOR_A}, error_code="INVALID_INPUT")
+        item = store.get_submission(row_id)
+        self.assertEqual((item["raw_input"], item["place"], item["status"]), (None, None, "INVALID_INPUT"))
+
+    def test_raw_input_expires_after_retention_but_statistics_remain(self):
+        self.assertEqual(store.RAW_RETENTION_DAYS, 180)
+        # Both rows are written while they are still fresh, then judged at the fixed clock (2026-09-20T10:00Z).
+        with patch.object(store, "utc_now", return_value=datetime(2026, 3, 24, 10, 0, 0, tzinfo=timezone.utc)):
+            expired = self.record({"visitor_id": VISITOR_A, "name": "옛이름"}, created_at="2026-03-23T09:59:59Z")
+            boundary = self.record({"visitor_id": VISITOR_A, "name": "경계"}, created_at="2026-03-24T10:00:00Z")
+        self.assertEqual(store.purge_expired(), 1)
+        self.assertEqual(store.purge_expired(), 0)
+        old = store.get_submission(expired)
+        self.assertEqual((old["raw_input"], old["display_name"], old["place"], old["summary"], old["fingerprint"]),
+                         (None, None, None, None, None))
+        self.assertEqual((old["consent"], old["sun_sign"], old["visitor_id"]), (store.CONSENT_OPT_IN, "게", VISITOR_A))
+        self.assertEqual(store.get_submission(boundary)["raw_input"], RAW)
+        self.assertEqual(store.stats()["totals"]["submissions"], 2)
+
+    def test_recording_purges_expired_rows(self):
+        expired = self.record({"name": "옛이름"}, created_at="2026-01-01T00:00:00Z")
+        self.record(created_at="2026-09-20T10:00:00Z")
+        self.assertIsNone(store.get_submission(expired)["raw_input"])
+
+    def test_consent_values_never_overlap_the_notice_only_policy(self):
+        # The notice-only app wrote consent=1 for every row, so 1 must keep meaning "legacy", never opt-in.
+        self.assertEqual((store.CONSENT_NONE, store.CONSENT_LEGACY, store.CONSENT_OPT_IN), (0, 1, 2))
+
+    def test_old_wire_consent_field_is_not_storage_consent(self):
+        # Tabs opened before the opt-in checkbox existed always sent `consent: true`; that is not opt-in.
+        with patch.object(store, "now_iso", return_value="2026-09-20T10:00:00Z"):
+            row_id = store.record_submission(dict(RAW), {"visitor_id": VISITOR_A, "name": "가상인물", "consent": True}, result=RESULT)
+        item = store.get_submission(row_id)
+        self.assertEqual((item["raw_input"], item["display_name"], item["consent"]), (None, None, 0))
+
+    def v4_database(self, rows=(), sequence=None):
+        connection = sqlite3.connect(self.path)
+        for version in (1, 2, 3, 4):
+            connection.executescript(store.MIGRATIONS[version])
+        connection.execute("PRAGMA user_version = 4")
+        for row_id, consent in rows:
+            connection.execute("INSERT INTO submissions (id, created_at, raw_input, status, consent, display_name) VALUES (?, ?, ?, ?, ?, ?)",
+                               (row_id, "2026-09-20T00:00:00Z", json.dumps(RAW), "success", consent, "기존"))
+        if sequence is not None:
+            connection.execute("UPDATE sqlite_sequence SET seq = ? WHERE name = 'submissions'", (sequence,))
+        connection.commit()
+        connection.close()
+
+    def test_migration_from_v4_marks_legacy_rows_and_keeps_them(self):
+        self.v4_database(rows=[(1, 1), (2, 0)], sequence=7)  # ids 3-7 were deleted before the upgrade
+        with patch.object(store, "_INITIALIZED", set()):
+            legacy = store.get_submission(1)
+            self.assertEqual((legacy["raw_input"], legacy["display_name"], legacy["consent"]), (RAW, "기존", store.CONSENT_LEGACY))
+            self.assertEqual(store.get_submission(2)["consent"], 0)
+            fresh = self.record({"store_consent": False})
+        self.assertEqual(fresh, 8)  # deleted ids are never reused
+        self.assertIsNone(store.get_submission(fresh)["raw_input"])
+        connection = sqlite3.connect(self.path)
+        self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], store.SCHEMA_VERSION)
+        indexes = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'submissions'")}
+        connection.close()
+        self.assertTrue({"submissions_created_at", "submissions_visitor", "submissions_status", "submissions_short_code",
+                         "submissions_raw_held"} <= indexes)
+
+    def test_legacy_rows_expire_like_any_other(self):
+        self.v4_database(rows=[(1, 1)])
+        with patch.object(store, "_INITIALIZED", set()), \
+                patch.object(store, "utc_now", return_value=datetime(2027, 3, 20, 0, 0, 1, tzinfo=timezone.utc)):
+            item = store.get_submission(1)
+        self.assertEqual((item["raw_input"], item["display_name"], item["consent"]), (None, None, store.CONSENT_LEGACY))
+
+    def test_failed_migration_rolls_back_and_can_be_retried(self):
+        self.v4_database(rows=[(1, 1)])
+        broken = store.MIGRATIONS[5].replace("DROP TABLE submissions;", "DROP TABLE submissions; SELECT no_such_function();")
+        with patch.object(store, "_INITIALIZED", set()), patch.dict(store.MIGRATIONS, {5: broken}):
+            with self.assertRaises(sqlite3.OperationalError):
+                store.connect()
+        connection = sqlite3.connect(self.path)
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
+        connection.close()
+        self.assertIn("submissions", tables)
+        self.assertNotIn("submissions_v5", tables)
+        with patch.object(store, "_INITIALIZED", set()):
+            self.assertEqual(store.get_submission(1)["display_name"], "기존")
 
 
 if __name__ == "__main__":

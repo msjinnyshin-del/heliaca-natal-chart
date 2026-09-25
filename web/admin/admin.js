@@ -306,10 +306,15 @@ async function openDetail(id) {
     define(meta, '이름', item.display_name);
     define(meta, 'visitor', item.visitor_id);
     define(meta, '상태', item.status);
-    define(meta, '고지 동의', item.consent ? '표시됨' : '미확인');
+    define(meta, '원문 저장 동의', ({ 2: '동의', 1: '이전 정책 (고지 기반 · 180일 후 자동 삭제)' })[item.consent] || '비동의 (원문 미저장)');
     define(meta, 'UTM', ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'].map((k) => item[k] && `${k.slice(4)}=${item[k]}`).filter(Boolean).join(' · '));
     define(meta, 'short code', item.short_code);
     define(meta, 'fingerprint', item.fingerprint);
+    if (item.raw_input === null) {
+      $('#detail-raw').textContent = item.consent ? '보관 기간(180일)이 지나 원문을 삭제했습니다.' : '저장 동의가 없어 원문을 저장하지 않았습니다.';
+      $('#detail-chart-status').textContent = '원문이 없어 차트를 재계산하지 않습니다.';
+      return;
+    }
     $('#detail-raw').textContent = JSON.stringify(item.raw_input, null, 2);
   } catch (error) {
     $('#detail-chart-status').textContent = error.message;

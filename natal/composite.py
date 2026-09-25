@@ -59,12 +59,16 @@ def calculate_composite(payload):
     charts = {}
     for key in ("person_a", "person_b"):
         try:
-            charts[key] = calculate_chart(payload[key])
+            charts[key] = calculate_chart(payload[key], require_known_time=True)
         except ChartError as error:
             details = dict(error.details or {})
             details["person"] = key
             raise ChartError(error.code, str(error), details) from None
     a, b = charts["person_a"], charts["person_b"]
+    # Midpoints of differently defined points (house systems, node or Lilith variants, orb rules) mean nothing.
+    mismatched = [key for key in ("house_system", "node_mode", "lilith_mode", "aspect_profile") if a["settings"][key] != b["settings"][key]]
+    if mismatched:
+        raise ChartError("INVALID_INPUT", "컴포지트는 두 차트의 하우스·노드·릴리스·어스펙트 설정이 같아야 합니다.", {"fields": mismatched})
     composite = calculate_composite_from(a, b)
     lat = (a["normalized"]["latitude"] + b["normalized"]["latitude"]) / 2
     lon = midpoint(a["normalized"]["longitude"] % 360, b["normalized"]["longitude"] % 360)

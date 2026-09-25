@@ -7,7 +7,8 @@ export const BODY_NAMES = { Sun: '태양', Moon: '달', Mercury: '수성', Venus
   Uranus: '천왕성', Neptune: '해왕성', Pluto: '명왕성', Chiron: '키론', NorthNode: '북노드', SouthNode: '남노드', Lilith: '릴리스',
   Fortune: '포르투나', Spirit: '스피릿', ASC: 'ASC', MC: 'MC' };
 export const ASPECT_NAMES = { Conjunction: ['☌', '합'], Sextile: ['⚹', '섹스타일'], Square: ['□', '스퀘어'], Trine: ['△', '트라인'],
-  Quincunx: ['⚻', '퀸컹스'], Opposition: ['☍', '대립'] };
+  Quincunx: ['⚻', '퀸컹스'], Opposition: ['☍', '대립'], SemiSquare: ['∠', '세미스퀘어'], Sesquiquadrate: ['⚼', '세스퀴쿼드레이트'],
+  Quintile: ['Q', '퀸타일'] };
 
 export function formatOrb(x) {
   return `${Math.floor(x)}°${String(Math.floor((x % 1) * 60)).padStart(2, '0')}′`;

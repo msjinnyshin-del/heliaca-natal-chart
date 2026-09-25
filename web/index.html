@@ -48,7 +48,12 @@
                 </span>
                 <input id="date" name="date" type="date" required>
               </div>
-              <label class="band-cell band-time"><span class="band-label">시각 <b>현지</b></span><input id="time" name="time" type="time" step="60" required></label>
+              <div class="band-cell band-time">
+                <span class="band-label"><label for="time">시각 <b>현지</b></label>
+                  <label class="time-unknown-toggle"><input type="checkbox" name="time_unknown"> 생시 모름</label>
+                </span>
+                <input id="time" name="time" type="time" step="60" required>
+              </div>
               <div class="band-cell band-place">
                 <span class="band-label"><label for="place">출생지</label></span>
                 <div class="place-search-row">
@@ -63,6 +68,7 @@
               <p id="place-status" class="place-status" aria-live="polite">출생지를 입력한 뒤 검색해 도시를 선택하세요. <span id="lunar-note" class="lunar-note" hidden>음력은 한국 음력 기준으로 양력으로 변환합니다.</span></p>
               <p class="hero-hint-right">가입 없이 계산 · 도시 검색어만 외부로 전송</p>
             </div>
+            <label class="consent-control"><input type="checkbox" name="store_consent" aria-describedby="storage-notice"> <span>이름·출생 정보 저장에 동의합니다 <b>(선택 · 180일 후 자동 삭제)</b></span></label>
             <p id="place-warning" class="place-warning" role="alert" hidden></p>
           </div>
         </div>
@@ -93,10 +99,11 @@
           <label class="field field-house">
             <span>House system <b>하우스 시스템</b></span>
             <select id="house-system" name="house_system">
-              <option value="P">Placidus · P</option><option value="W">Whole Sign · W</option><option value="E">Equal · E</option><option value="K">Koch · K</option><option value="O">Porphyry · O</option>
+              <option value="P">Placidus · P</option><option value="W">Whole Sign · W</option><option value="E">Equal · E</option><option value="K">Koch · K</option><option value="O">Porphyry · O</option><option value="R">Regiomontanus · R</option><option value="C">Campanus · C</option><option value="B">Alcabitius · B</option>
             </select>
           </label>
           <fieldset class="field radio-field"><legend>North Node <b>북교점 방식</b></legend><label><input type="radio" name="node_mode" value="true" checked> True</label><label><input type="radio" name="node_mode" value="mean"> Mean</label></fieldset>
+          <fieldset class="field radio-field lilith-field"><legend>Lilith <b>검은 달 방식</b></legend><label><input type="radio" name="lilith_mode" value="mean" checked> Mean</label><label><input type="radio" name="lilith_mode" value="osculating"> Osculating</label></fieldset>
           <details id="aspect-options" class="settings-details aspect-options">
             <summary>어스펙트 대상과 point orb 설정</summary>
             <p class="settings-intro">기본 행성에 더해 계산에 포함할 점을 선택하세요. point orb는 각 추가점에 허용할 최대 각도입니다.</p>
@@ -107,6 +114,20 @@
               <label><input type="checkbox" name="aspect_nodes"> Lunar Nodes</label>
               <label><input type="checkbox" name="aspect_lots"> Lots</label>
             </div>
+            <p class="settings-intro">부가 어스펙트는 선택한 경우에만 계산합니다. 기본 허용 오브는 Quincunx 3°, 나머지 2°이고 해·달 가산이 없습니다. 오브 배율을 곱하며, 추가점(Chiron·Lilith·노드·Lot·각도)과의 부가 어스펙트는 최대 2°입니다.</p>
+            <div class="aspect-target-grid" aria-label="부가 어스펙트">
+              <label><input type="checkbox" name="minor_aspect" value="Quincunx"> Quincunx 150°</label>
+              <label><input type="checkbox" name="minor_aspect" value="SemiSquare"> Semi-square 45°</label>
+              <label><input type="checkbox" name="minor_aspect" value="Sesquiquadrate"> Sesquiquadrate 135°</label>
+              <label><input type="checkbox" name="minor_aspect" value="Quintile"> Quintile 72°</label>
+            </div>
+            <label class="orb-scale-field"><span>오브 배율</span>
+              <select id="orb-scale" name="orb_scale">
+                <option value="0.5">50%</option><option value="0.6">60%</option><option value="0.7">70%</option><option value="0.8">80%</option><option value="0.9">90%</option>
+                <option value="1" selected>100% (기본)</option><option value="1.1">110%</option><option value="1.2">120%</option><option value="1.3">130%</option><option value="1.4">140%</option>
+              </select>
+              <b>기본 오브에 곱합니다. 추가점 오브 상한(아래)은 그대로 적용됩니다.</b>
+            </label>
             <div class="orb-grid">
               <label><span>Chiron</span><input id="orb-chiron" name="orb_chiron" type="number" min="0" max="3" step="0.1" value="3" required><b>°</b></label>
               <label><span>Nodes</span><input id="orb-nodes" name="orb_nodes" type="number" min="0" max="3" step="0.1" value="3" required><b>°</b></label>
@@ -119,8 +140,8 @@
         </div>
         <div class="form-footer">
           <div class="form-notes">
-            <p><strong>1900년 이후의 알려진 출생 시각을 지원합니다.</strong> 1970년 이전 출생은 당시 기록된 시간대(서머타임 등)를 적용하며 결과에 적용된 UTC 오프셋을 표시합니다. 시각을 모르면 ASC·MC·하우스를 정확히 계산할 수 없으므로 임의의 시각을 입력하지 마세요.</p>
-            <p id="storage-notice" class="storage-notice">차트 계산 시 입력한 이름·출생 정보는 서비스 운영을 위해 저장되며 관리자만 열람합니다. 삭제를 원하시면 요청해 주세요.</p>
+            <p><strong>1900년 이후 출생을 지원합니다.</strong> 1970년 이전 출생은 당시 기록된 시간대(서머타임 등)를 적용하며 결과에 적용된 UTC 오프셋을 표시합니다. 시각을 모르면 임의의 시각 대신 <b>생시 모름</b>을 선택하세요. 현지 정오를 대표값으로 쓰고, ASC·MC·하우스·주야는 계산하지 않으며, 하루 중 바뀌는 사인·어스펙트는 따로 표시합니다.</p>
+            <p id="storage-notice" class="storage-notice">저장에 동의한 경우에만 이름·생년월일시·출생지를 서비스 운영 목적으로 저장하며 관리자만 열람하고 180일 후 자동 삭제합니다. 동의하지 않아도 계산할 수 있고, 이때는 계산 성공 여부·태양/달/ASC 별자리·유입 경로만 익명 브라우저 ID와 함께 기록됩니다. <button id="delete-my-data" class="inline-link-button" type="button">이 브라우저의 저장 기록 삭제</button></p>
             <p id="place-privacy" class="place-privacy">출생지 검색 시 도시 검색어만 외부 서비스에 전송됩니다. 이름과 생년월일시는 전송하지 않습니다. 데이터: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a></p>
           </div>
         </div>
@@ -180,7 +201,7 @@
     </aside>
   </main>
 
-  <footer><span class="footer-brand"><img src="/assets/heliaca-mark.svg" alt="">Heliaca · 당신의 시작을 비추는 별의 지도.</span><span>입력 정보는 서비스 운영 목적으로 저장되며 요청 시 삭제합니다.</span></footer>
+  <footer><span class="footer-brand"><img src="/assets/heliaca-mark.svg" alt="">Heliaca · 당신의 시작을 비추는 별의 지도.</span><span>출생 정보는 동의한 경우에만 저장하며 180일 후 자동 삭제합니다.</span></footer>
   <script type="module" src="/site-nav.js"></script>
   <script type="module" src="/cosmos.js"></script>
   <script type="module" src="/app.js"></script>

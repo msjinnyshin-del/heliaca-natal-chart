@@ -23,7 +23,7 @@ test('exports actual positions, cusps, aspects, input and provenance without rec
   assert.match(md, /Swiss Ephemeris.*2\.10\.03/);
   assert.match(md, /sepl_18\.se1/);
   assert.match(md, /2025b/);
-  assert.match(md, /major-v2/);
+  assert.match(md, /aspects-v3/);
   assert.match(md, /사용자 수동 입력/);
   assert.match(md, /Pluto\).*\| S \|/);
   assert.match(md, /\| 12 \|/);
@@ -60,6 +60,9 @@ test('names and places remain quoted table data, not HTML or new prompt sections
 });
 
 test('rejects partial, blocked or incomplete result instead of inventing chart data', () => {
+  const unknownTime = structuredClone(chart);
+  unknownTime.normalized.time_accuracy = 'unknown';
+  assert.throws(() => exporter.buildInterpretationMarkdown(unknownTime), /완성된/);
   for (const status of ['partial', 'blocked']) {
     assert.throws(() => exporter.buildInterpretationMarkdown({...chart,status}), /완성된/);
   }
@@ -85,4 +88,17 @@ print(json.dumps(calculate_chart(dict(date='1972-08-27',time='22:20:00',timezone
   assert.match(md, /역행·근정지\*\*: .*\(S\)/);
   assert.ok(md.indexOf('## 10. 제출 전 자기점검') < md.indexOf('## 입력 정보'));
   assert.doesNotMatch(md, /undefined|NaN|\[object Object\]/);
+});
+
+test('exports the chosen house system, Lilith variant, minor aspects and orb scale', () => {
+  const run3 = spawnSync('.venv/bin/python', ['-c', `import json
+from natal.engine import calculate_chart
+print(json.dumps(calculate_chart(dict(date='1985-07-14',time='21:45:00',timezone='America/New_York',latitude=40.7128,longitude=-74.006,place='New York',house_system='R',node_mode='true',lilith_mode='osculating',time_accuracy='reported',aspect_profile=dict(minor=['Quincunx','SemiSquare','Sesquiquadrate','Quintile'],orb_scale=1.2)))))`], { encoding: 'utf8', cwd: new URL('..', import.meta.url) });
+  assert.equal(run3.status, 0, run3.stderr);
+  const md = exporter.buildInterpretationMarkdown(JSON.parse(run3.stdout));
+  assert.match(md, /Regiomontanus/);
+  assert.match(md, /Osculating/);
+  assert.match(md, /minor Quincunx, SemiSquare, Sesquiquadrate, Quintile/);
+  assert.match(md, /orb ×1\.2/);
+  assert.doesNotMatch(md, /부가 어스펙트는 계산 범위 밖/);
 });

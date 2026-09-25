@@ -1,6 +1,7 @@
 """Deployment boundary: allowed hosts, proxy headers on Vercel, production secret, api/index.py, Postgres backend."""
 import http.client
 import importlib.util
+from datetime import datetime, timezone
 import json
 import os
 import tempfile
@@ -197,22 +198,29 @@ class PostgresBackendTests(unittest.TestCase):
         visitor = "visitorAAAAAAAAAAAAAA"
         result = {"bodies": [{"id": "Sun", "sign_index": 5}, {"id": "Moon", "sign_index": 0}],
                   "angles": [{"id": "ASC", "sign_index": 0}], "metadata": {"input_fingerprint": "fp"}}
+        # Fixed clock: retention (180 days) is judged against it, so dated rows never expire in this test.
+        clock = patch.object(store, "utc_now", return_value=datetime(2026, 9, 20, 10, 0, 0, tzinfo=timezone.utc))
+        clock.start()
+        self.addCleanup(clock.stop)
         with patch.object(store, "now_iso", return_value="2026-09-20T10:00:00Z"):
-            first = store.record_submission({"place": "서울"}, {"visitor_id": visitor, "name": "가상인물", "consent": True,
+            first = store.record_submission({"place": "서울"}, {"visitor_id": visitor, "name": "가상인물", "store_consent": True,
                                                               "utm": {"utm_source": "instagram"}}, result=result)
-            store.record_submission({"place": "서울"}, {"visitor_id": visitor, "name": "Tester"}, error_code="INVALID_INPUT")
+            store.record_submission({"place": "서울"}, {"visitor_id": visitor, "name": "Tester", "store_consent": True}, error_code="INVALID_INPUT")
+            store.record_submission({"place": "서울"}, {"visitor_id": visitor, "name": "비동의"}, error_code="INVALID_INPUT")
             store.record_submission({}, {}, error_code="INVALID_INPUT")
         self.assertIsInstance(first, int)
         totals = store.stats("2026-09-20", "2026-09-20")["totals"]
-        self.assertEqual(totals, {"submissions": 3, "success": 1, "failed": 2, "unique_visitors": 1, "unique_names": 2})
+        self.assertEqual(totals, {"submissions": 4, "success": 1, "failed": 3, "unique_visitors": 1, "unique_names": 2})
         users = store.users(q="VISITORaaa")  # case-insensitive like SQLite
         self.assertEqual(users["users"][0]["names"], ["Tester", "가상인물"])
         self.assertEqual(users["anonymous_submissions"], 1)
         listing = store.list_submissions(q="서", status="failed")
         self.assertEqual(listing["total"], 1)
+        unconsented = store.list_submissions(status="failed")["submissions"][1]
+        self.assertEqual((unconsented["display_name"], unconsented["place"], unconsented["consent"]), (None, None, 0))
         item = store.get_submission(first)
-        self.assertEqual((item["raw_input"], item["consent"], item["sun_sign"]), ({"place": "서울"}, 1, "처녀"))
-        self.assertEqual(store.delete_visitor(visitor), 2)
+        self.assertEqual((item["raw_input"], item["consent"], item["sun_sign"]), ({"place": "서울"}, store.CONSENT_OPT_IN, "처녀"))
+        self.assertEqual(store.delete_visitor(visitor), 3)
         self.assertEqual(store.delete_submission(first), 0)
 
     def test_utm_links_clicks_and_stats(self):

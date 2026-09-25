@@ -42,9 +42,19 @@ test('tampered stored attribution is re-validated', () => {
 });
 
 test('client context is separate from the chart payload and trims name', () => {
-  const context = buildClientContext({ visitorId: 'visitorAAAAAAAAAAAAAA', name: '  가상인물  ', attribution: { utm: { utm_source: 'ig' }, short_code: null } });
-  assert.deepEqual(context, { visitor_id: 'visitorAAAAAAAAAAAAAA', name: '가상인물', consent: true, utm: { utm_source: 'ig' }, short_code: null });
+  const context = buildClientContext({ visitorId: 'visitorAAAAAAAAAAAAAA', name: '  가상인물  ', consent: true, attribution: { utm: { utm_source: 'ig' }, short_code: null } });
+  assert.deepEqual(context, { visitor_id: 'visitorAAAAAAAAAAAAAA', name: '가상인물', store_consent: true, utm: { utm_source: 'ig' }, short_code: null });
   assert.equal(buildClientContext({ visitorId: 'bad', name: '', attribution: null }).visitor_id, null);
+});
+
+test('storage consent is opt-in and the name is not sent without it', () => {
+  for (const consent of [undefined, false, 'true', 1]) {
+    const context = buildClientContext({ visitorId: 'visitorAAAAAAAAAAAAAA', name: '가상인물', consent, attribution: null });
+    assert.equal(context.store_consent, false);
+    assert.equal('consent' in context, false);
+    assert.equal(context.name, null);
+    assert.equal(context.visitor_id, 'visitorAAAAAAAAAAAAAA');
+  }
 });
 
 test('short-link redirect query (/l/CODE -> /?utm_*&sc=CODE) is captured as first touch', () => {
