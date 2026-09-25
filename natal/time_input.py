@@ -80,15 +80,21 @@ def _local_date_and_zone(payload):
     if tzdata.__version__ != "2025.2" or tzdata.IANA_VERSION != "2025b":
         raise ChartError("TIMEZONE_NEEDS_REVIEW", "고정된 tzdata 2025.2 (IANA 2025b)가 필요합니다.")
     zone_name = payload.get("timezone")
+    return local_date, zone_name, load_zone(zone_name)
+
+
+def load_zone(zone_name):
+    """ZoneInfo from the pinned tzdata package only (never the host TZPATH)."""
+    if tzdata.__version__ != "2025.2" or tzdata.IANA_VERSION != "2025b":
+        raise ChartError("TIMEZONE_NEEDS_REVIEW", "고정된 tzdata 2025.2 (IANA 2025b)가 필요합니다.")
     if not isinstance(zone_name, str) or not zone_name or any(part in ("", ".", "..") for part in zone_name.split("/")) or "\\" in zone_name:
         raise ChartError("INVALID_INPUT", "유효한 IANA 시간대를 입력하세요.")
     path = Path(tzdata.__file__).parent / "zoneinfo" / zone_name
     try:
         with path.open("rb") as file:
-            zone = ZoneInfo.from_file(file, key=zone_name)
+            return ZoneInfo.from_file(file, key=zone_name)
     except (OSError, ValueError):
         raise ChartError("INVALID_INPUT", "알 수 없는 IANA 시간대입니다.") from None
-    return local_date, zone_name, zone
 
 
 def _candidates(naive, zone):

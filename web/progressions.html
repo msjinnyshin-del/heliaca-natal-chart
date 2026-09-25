@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Heliaca 세컨더리 프로그레션 — 출생 후 하루를 인생 1년으로 옮겨 내면의 흐름을 봅니다">
+  <meta name="theme-color" content="#020606">
+  <title>Heliaca · 세컨더리 프로그레션</title>
+  <link rel="icon" href="/assets/heliaca-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-tool="progressions">
+  <a class="skip-link" href="#tool-form">출생 정보 입력으로 건너뛰기</a>
+  <header class="masthead">
+    <a class="brand-block" href="/" aria-label="Heliaca 네이털 차트로">
+      <img class="brand-logo" src="/assets/heliaca-logo.svg" alt="Heliaca">
+    </a>
+  </header>
+
+  <main id="top">
+    <section class="input-station" aria-labelledby="input-title">
+      <div class="input-heading">
+        <div>
+          <p class="plate-number">TOOL 06 / PROGRESSIONS</p>
+          <h2 id="input-title">하루가 한 해가 되는 시간</h2>
+        </div>
+        <p class="scope-note">세컨더리 프로그레션은 태어난 뒤의 하루를 인생의 1년으로 대응시킵니다. 서른 살이면 출생 30일 뒤의 하늘입니다. 진행된 달과 태양이 네이털 포인트를 지나는 때가 내면의 전환점입니다.</p>
+      </div>
+
+      <form id="tool-form" novalidate>
+        <div class="synastry-people single-person">
+          <div data-prefix="a-" data-label="나 · NATAL" data-short="출생 정보"></div>
+        </div>
+        <div class="fields-grid synastry-shared transit-moment">
+          <label class="field field-date"><span>기준 날짜</span><input id="moment-date" type="date" required></label>
+          <label class="field field-time"><span>시각</span><input id="moment-time" type="time" step="60" required></label>
+          <label class="field field-name"><span>시간대 <b>IANA</b></span><input id="moment-timezone" spellcheck="false" required></label>
+        </div>
+        <div class="fields-grid synastry-shared">
+          <label class="field field-house">
+            <span>House system</span>
+            <select id="house-system" name="house_system">
+              <option value="P">Placidus · P</option><option value="W">Whole Sign · W</option><option value="E">Equal · E</option><option value="K">Koch · K</option><option value="O">Porphyry · O</option><option value="R">Regiomontanus · R</option><option value="C">Campanus · C</option><option value="B">Alcabitius · B</option>
+            </select>
+          </label>
+          <fieldset class="field radio-field"><legend>North Node</legend><label><input type="radio" name="node_mode" value="true" checked> True</label><label><input type="radio" name="node_mode" value="mean"> Mean</label></fieldset>
+        </div>
+        <div class="form-footer">
+          <div class="form-notes">
+            <p><strong>1900년 이후의 알려진 출생 시각이 필요합니다.</strong> 생시 미상 차트는 이 도구에서 계산하지 않습니다.</p>
+            <p class="storage-notice">입력은 서버에 저장하지 않습니다. 장소 검색 시 도시 검색어만 외부 서비스(Open-Meteo · GeoNames)로 전송됩니다.</p>
+          </div>
+          <button id="calculate-button" class="calculate-button" type="submit"><span>프로그레션 계산</span><span aria-hidden="true">↗</span></button>
+        </div>
+      </form>
+    </section>
+
+    <div id="shared-banner" class="shared-banner" hidden></div>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+
+    <section id="tool-workbench" class="workbench" aria-labelledby="result-title" aria-busy="false">
+      <div class="result-heading">
+        <div class="result-title-block">
+          <p class="plate-number">02 / PROGRESSED</p>
+          <h2 id="result-title">진행 차트가 이곳에 겹쳐집니다</h2>
+          <p id="result-subtitle" class="result-subtitle">출생 정보를 입력하고 프로그레션 계산을 눌러주세요.</p>
+        </div>
+        <div class="result-tools"><div class="result-actions">
+          <span id="freshness-badge" class="status-badge is-waiting">입력 대기</span>
+          <button id="copy-markdown" class="copy-button" type="button" disabled>해석용 MD 복사</button>
+        </div></div>
+      </div>
+
+      <div class="primary-grid">
+        <figure class="chart-panel">
+          <div id="chart-stage" class="chart-stage"><div class="chart-placeholder" aria-hidden="true"><span>✦</span></div></div>
+          <figcaption>안쪽: <span class="syn-key-a">네이털</span> 하우스와 행성 · 바깥 띠: <span class="syn-key-b">진행</span> 행성 · 중앙선: 진행→네이털 어스펙트(오브 1°)</figcaption>
+        </figure>
+        <section class="positions-panel" aria-labelledby="positions-title">
+          <div class="section-heading"><div><p class="plate-number">POSITIONS</p><h3 id="positions-title">진행 행성</h3></div></div>
+          <div class="table-scroll"><table><thead><tr><th scope="col">진행</th><th scope="col">위치</th><th scope="col">네이털 H</th></tr></thead><tbody id="positions-body"><tr><td colspan="3" class="empty-cell">계산 대기 중</td></tr></tbody></table></div>
+        </section>
+      </div>
+
+      <section class="detail-deck" aria-label="세부 정보">
+        <div class="scrub-bar" aria-label="시점 이동">
+          <button class="text-button" type="button" data-shift="-365">−1년</button><button class="text-button" type="button" data-shift="-30">−1개월</button>
+          <button class="copy-button" type="button" id="moment-now">지금</button>
+          <button class="text-button" type="button" data-shift="30">+1개월</button><button class="text-button" type="button" data-shift="365">+1년</button>
+        </div>
+        <div class="tab-list" role="tablist" aria-label="결과 보기">
+          <button id="tab-aspects" role="tab" aria-selected="true" aria-controls="panel-aspects">진행 어스펙트</button>
+          <button id="tab-evidence" role="tab" aria-selected="false" aria-controls="panel-evidence" tabindex="-1">계산 근거</button>
+        </div>
+        <div id="panel-aspects" role="tabpanel" aria-labelledby="tab-aspects"><div id="aspects-register" class="detail-content empty-state">계산 후 진행→네이털 어스펙트가 표시됩니다.</div></div>
+        <div id="panel-evidence" role="tabpanel" aria-labelledby="tab-evidence" hidden><div id="evidence-register" class="detail-content empty-state">진행 키, 각도점 방식, 두 시점의 UTC가 표시됩니다.</div></div>
+      </section>
+
+    </section>
+
+  </main>
+
+  <footer><span class="footer-brand"><img src="/assets/heliaca-mark.svg" alt="">Heliaca · 당신의 시작을 비추는 별의 지도.</span><span>프로그레션 입력은 저장하지 않습니다.</span></footer>
+  <script type="module" src="/site-nav.js"></script>
+  <script type="module" src="/progressions.js"></script>
+</body>
+</html>

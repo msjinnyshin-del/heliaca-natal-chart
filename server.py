@@ -26,7 +26,9 @@ VERCEL_HOST_VARS = ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTIO
 
 CALCULATORS = {"/api/synastry": ("natal.synastry", "calculate_synastry"),
                "/api/composite": ("natal.composite", "calculate_composite"),
-               "/api/transits": ("natal.transits", "calculate_transits")}
+               "/api/transits": ("natal.transits", "calculate_transits"),
+               "/api/solar-return": ("natal.solar_return", "calculate_solar_return"),
+               "/api/progressions": ("natal.progressions", "calculate_progressions")}
 SHARE_KINDS = {"synastry": CALCULATORS["/api/synastry"], "composite": CALCULATORS["/api/composite"]}
 
 

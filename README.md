@@ -25,6 +25,14 @@ cd natal-chart   # 이 저장소 폴더
 
 `natal/transits.py`(`transit-v1`): 네이털 차트와 지정 시점(기본 브라우저의 지금·시간대)의 행성을 겹친다. orb는 합·스퀘어·트라인·대립 3°, 섹스타일 2°, 퀸컹스 1°이며 접근/분리는 해당 시점의 속도로 판정한다. 트랜짓 시점만 내부 플래그(`allow_future`)로 2100년까지 미래를 허용하고, 출생 입력의 미래 거부는 그대로다. 모호한 DST 시각은 fold 0으로 정한다. ±1/7/30일 이동 버튼으로 흐름을 본다. 저장·공유는 하지 않는다.
 
+### 솔라 리턴 (`/solar-return.html`, `POST /api/solar-return`)
+
+`natal/solar_return.py`(`solar-return-v1`): `{natal, year, location}`. 태양의 겉보기 황경이 네이털 값으로 돌아오는 순간을 이분 탐색(약 1ms)하고, 사용자가 고른 장소(기본: 출생지)의 하우스로 귀환 차트를 계산한다. 정확한 UTC 순간·잔차와 귀환 행성의 네이털 하우스를 함께 반환한다. 귀환 순간이 윤초(23:59:60) 안에 들면 UTC 표기는 다음 날 00:00:00.x로 넘어간다(1초 미만 차이). 저장·공유하지 않는다.
+
+### 세컨더리 프로그레션 (`/progressions.html`, `POST /api/progressions`)
+
+`natal/progressions.py`(`secondary-progression-v1`): `{natal, moment}`. 1일 = 평균 회귀년 1년(365.24219일). 진행 천체는 진행 순간의 실제 천체력, 각도점은 황경 솔라 아크(MC 이동 후 출생 위도에서 ASC·커스프)이며 Fortune·Spirit·주야는 제외한다. 진행→네이털 어스펙트는 주요 5종·오브 1°. 저장·공유하지 않는다.
+
 새 환경에서는 Python 3.9 이상과 아래 설치가 필요하다.
 
 ```sh

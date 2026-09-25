@@ -4,6 +4,8 @@ const GROUPS = [
   { label: '나', items: [
     { id: 'natal', href: '/', name: '네이털 차트', note: '태어난 순간의 하늘' },
     { id: 'transits', href: '/transits.html', name: '트랜짓', note: '지금 하늘이 내 차트에 닿는 곳' },
+    { id: 'solar-return', href: '/solar-return.html', name: '솔라 리턴', note: '생일마다 새로 세우는 한 해의 차트' },
+    { id: 'progressions', href: '/progressions.html', name: '프로그레션', note: '하루가 1년, 내면의 흐름' },
   ] },
   { label: '관계', items: [
     { id: 'synastry', href: '/synastry.html', name: '시너스트리', note: '두 차트를 겹쳐 비교' },

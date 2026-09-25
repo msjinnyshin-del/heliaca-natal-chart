@@ -24,25 +24,10 @@ export function withMore(visible, hidden, label, count) {
   return nodes;
 }
 
-function personFields(prefix, label) {
-  const p = (id) => `${prefix}${id}`;
-  const wrap = make('fieldset', 'synastry-person fields-grid');
-  // Static template: only fixed ids/labels from this module, never user input.
-  wrap.innerHTML = `
-    <legend class="person-legend"></legend>
-    <label class="field field-name"><span>이름 <em>선택</em></span><input id="${p('name')}" placeholder="이름 · 닉네임" autocomplete="off"></label>
-    <div class="field field-date">
-      <span><label for="${p('date')}">생년월일</label></span>
-      <div class="calendar-toggle" role="radiogroup" aria-label="달력 종류">
-        <label><input type="radio" name="${p('calendar')}" value="gregorian" checked> 양력</label>
-        <label><input type="radio" name="${p('calendar')}" value="lunar"> 음력</label>
-        <label class="lunar-leap" hidden><input type="checkbox" id="${p('lunar_leap')}"> 윤달</label>
-      </div>
-      <input id="${p('date')}" type="date" required>
-    </div>
-    <label class="field field-time"><span>태어난 시각 <b>현지</b></span><input id="${p('time')}" type="time" step="60" required></label>
+function placeMarkup(p, placeLabel) {
+  return `
     <div class="place-field">
-      <label class="field-label" for="${p('place')}">출생지</label>
+      <label class="field-label" for="${p('place')}">${placeLabel}</label>
       <div class="place-search-row">
         <input id="${p('place')}" type="search" role="combobox" aria-autocomplete="list" aria-controls="${p('place-results')}" aria-expanded="false" autocomplete="off" placeholder="예: 서울, 부산, New York" required>
         <button id="${p('place-search-button')}" class="place-search-button" type="button">검색</button>
@@ -62,6 +47,26 @@ function personFields(prefix, label) {
         </div>
       </details>
     </div>`;
+}
+
+function personFields(prefix, label) {
+  const p = (id) => `${prefix}${id}`;
+  const wrap = make('fieldset', 'synastry-person fields-grid');
+  // Static template: only fixed ids/labels from this module, never user input.
+  wrap.innerHTML = `
+    <legend class="person-legend"></legend>
+    <label class="field field-name"><span>이름 <em>선택</em></span><input id="${p('name')}" placeholder="이름 · 닉네임" autocomplete="off"></label>
+    <div class="field field-date">
+      <span><label for="${p('date')}">생년월일</label></span>
+      <div class="calendar-toggle" role="radiogroup" aria-label="달력 종류">
+        <label><input type="radio" name="${p('calendar')}" value="gregorian" checked> 양력</label>
+        <label><input type="radio" name="${p('calendar')}" value="lunar"> 음력</label>
+        <label class="lunar-leap" hidden><input type="checkbox" id="${p('lunar_leap')}"> 윤달</label>
+      </div>
+      <input id="${p('date')}" type="date" required>
+    </div>
+    <label class="field field-time"><span>태어난 시각 <b>현지</b></span><input id="${p('time')}" type="time" step="60" required></label>
+    ${placeMarkup(p, '출생지')}`;
   wrap.querySelector('legend').textContent = label;
   return wrap;
 }
@@ -105,6 +110,27 @@ function mountPerson(form, slot, onChange) {
         location_source: place.source(),
       };
     },
+  };
+}
+
+/** A place-only slot (e.g. the location a solar return is cast for); same search and manual-coordinate rules. */
+export function mountPlaceSlot(slot, onChange) {
+  const prefix = slot.dataset.placePrefix;  // not data-prefix: that marks birth-data people
+  const wrap = make('fieldset', 'synastry-person fields-grid');
+  // Static template: only fixed ids/labels, never user input.
+  wrap.innerHTML = `<legend class="person-legend"></legend>${placeMarkup((id) => `${prefix}${id}`, slot.dataset.placeLabel || '장소')}`;
+  wrap.querySelector('legend').textContent = slot.dataset.label || '장소';
+  slot.replaceWith(wrap);
+  const get = (id) => document.getElementById(`${prefix}${id}`);
+  const place = mountPlaceSearch({ onChange, prefix });
+  return {
+    element: wrap,
+    validate: () => (place.validate() ? '' : `${slot.dataset.label || '장소'}를 검색해 선택하거나 좌표를 직접 입력하세요.`),
+    payload: () => ({
+      latitude: get('latitude').value === '' ? null : Number(get('latitude').value),
+      longitude: get('longitude').value === '' ? null : Number(get('longitude').value),
+      timezone: get('timezone').value.trim(), place: get('place').value.trim(), location_source: place.source(),
+    }),
   };
 }
 
@@ -169,7 +195,7 @@ export function mountToolPage(config) {
       if (request !== serial) return;
       if (!response.ok || data.error) {
         const whoKey = data.error?.details?.person;
-        const who = whoKey === 'person_a' ? people[0]?.label : whoKey === 'person_b' ? people[1]?.label : whoKey === 'moment' ? '트랜짓 시점' : '';
+        const who = whoKey === 'person_a' ? people[0]?.label : whoKey === 'person_b' ? people[1]?.label : whoKey === 'moment' ? (config.momentLabel || '기준 시점') : '';
         throw new Error(`${who ? `${who} · ` : ''}${data.error?.code || ''} ${data.error?.message || `HTTP ${response.status}`}`);
       }
       sharedNames = null;

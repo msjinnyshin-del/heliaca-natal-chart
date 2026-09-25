@@ -251,6 +251,10 @@ body[data-tool="natal"] .input-station::before { content: 'SETTINGS / 01'; }
 .field input[readonly]:focus { border-color: var(--rule); box-shadow: none; }
 .aspect-options { grid-column: 1 / -1; }
 .lilith-field { grid-column: 1 / -1; }
+.return-row .field { grid-column: span 6; }
+.synastry-people[hidden] { display: none; }
+.inline-check { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.4rem; color: var(--ink); font-size: .86rem; cursor: pointer; }
+.inline-check input { width: auto; flex: none; accent-color: var(--teal); }
 .settings-intro { max-width: 54rem; margin: 1rem 1rem .8rem; color: var(--ink-faint); font-size: .7rem; }
 .aspect-target-grid { display: flex; flex-wrap: wrap; gap: .55rem; margin: 0 1rem 1rem; }
 .aspect-target-grid label { display: inline-flex; align-items: center; gap: .38rem; border: 1px solid var(--rule); border-radius: 999px; padding: .45rem .68rem; color: var(--ink-soft); font-size: .68rem; }

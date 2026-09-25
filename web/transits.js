@@ -86,6 +86,7 @@ function markdown(result, n) {
 
 const page = mountToolPage({
   kind: 'transits',
+  momentLabel: '트랜짓 시점',
   endpoint: '/api/transits',
   shareable: false,
   busyText: '네이털과 트랜짓 시점을 계산하는 중입니다.',

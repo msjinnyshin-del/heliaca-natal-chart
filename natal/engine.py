@@ -1,4 +1,5 @@
 """Validated Swiss adapter. One lock owns the complete global-state transaction."""
+from contextlib import contextmanager
 import hashlib
 from importlib.metadata import version
 import json
@@ -50,6 +51,28 @@ def validate_data():
         if isinstance(exc, ChartError):
             raise
         raise ChartError("EPHEMERIS_DATA_MISSING", "필수 천체력 파일 또는 manifest를 읽을 수 없습니다.") from None
+
+
+@contextmanager
+def engine_session():
+    """Exclusive, freshly configured Swiss state; yields the validated data manifest."""
+    with ENGINE_LOCK:
+        manifest = validate_data()
+        # close clears previous open-file state; every request fixes mutable globals.
+        swe.close()
+        swe.set_ephe_path(str(DATA_DIR))
+        swe.set_tid_acc(swe.TIDAL_AUTOMATIC)
+        swe.set_delta_t_userdef(swe.DELTAT_AUTOMATIC)
+        yield manifest
+
+
+def checked_cusps(cusps, ascmc):
+    if len(cusps) != 12 or not all(math.isfinite(x) for x in (*cusps, *ascmc)):
+        raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "하우스 계산이 비정상 수치를 반환했습니다.")
+    widths = [(cusps[(i + 1) % 12] - cusps[i]) % 360 for i in range(12)]
+    if any(w <= 0 for w in widths) or abs(sum(widths) - 360) > 1e-7:
+        raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "유효하지 않은 하우스 커스프 순서입니다.")
+    return cusps, ascmc
 
 
 def checked_calc(jd_tt, body):
@@ -132,13 +155,7 @@ def calculate_chart(payload, allow_future=False, require_known_time=False):
     else:
         utc, offset, zone, resolution = resolve_time(solar_payload, allow_future=allow_future)
     location_source = normalize_location_source(payload, latitude, longitude, zone)
-    with ENGINE_LOCK:
-        manifest = validate_data()
-        # close clears previous open-file state; every request fixes mutable globals.
-        swe.close()
-        swe.set_ephe_path(str(DATA_DIR))
-        swe.set_tid_acc(swe.TIDAL_AUTOMATIC)
-        swe.set_delta_t_userdef(swe.DELTAT_AUTOMATIC)
+    with engine_session() as manifest:
         try:
             jd_tt, jd_ut1 = swe.utc_to_jd(utc.year, utc.month, utc.day, utc.hour, utc.minute, utc.second, swe.GREG_CAL)
         except swe.Error:
@@ -151,11 +168,7 @@ def calculate_chart(payload, allow_future=False, require_known_time=False):
                 cusps, ascmc = swe.houses_ex(jd_ut1, latitude, longitude, house_system.encode("ascii"), 0)
             except swe.Error:
                 raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "선택한 위치에서 하우스 계산에 실패했습니다. 다른 하우스 시스템을 선택하세요.") from None
-            if len(cusps) != 12 or not all(math.isfinite(x) for x in (*cusps, *ascmc, jd_tt, jd_ut1)):
-                raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "하우스 계산이 비정상 수치를 반환했습니다.")
-            widths = [(cusps[(i + 1) % 12] - cusps[i]) % 360 for i in range(12)]
-            if any(w <= 0 for w in widths) or abs(sum(widths) - 360) > 1e-7:
-                raise ChartError("HOUSE_SYSTEM_UNAVAILABLE", "유효하지 않은 하우스 커스프 순서입니다.")
+            checked_cusps(cusps, ascmc)
         obliquity = swe.calc(jd_tt, swe.ECL_NUT, 0)[0][0]
         bodies = []
         definitions = BODY_DEFS + (("NorthNode", "북노드", "☊", swe.TRUE_NODE if node_mode == "true" else swe.MEAN_NODE),

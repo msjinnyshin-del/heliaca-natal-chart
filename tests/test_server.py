@@ -120,6 +120,28 @@ class ServerTests(unittest.TestCase):
         for page in ("/synastry.html", "/composite.html", "/transits.html", "/tool-page.js"):
             self.assertEqual(self.request("GET", page)[0], 200)
 
+    def test_solar_return_and_progression_endpoints(self):
+        person = {"date": "1990-05-15", "time": "14:30", "timezone": "Asia/Seoul", "latitude": 37.5665, "longitude": 126.978,
+                  "place": "Seoul", "house_system": "P", "node_mode": "true"}
+        json_headers = {"Content-Type": "application/json"}
+        location = {"latitude": 35.1796, "longitude": 129.0756, "timezone": "Asia/Seoul", "place": "Busan"}
+        status, _, raw = self.request("POST", "/api/solar-return", json.dumps({"natal": person, "year": 2026, "location": location}), json_headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(raw)["return"]["normalized"]["latitude"], 35.1796)
+        status, _, raw = self.request("POST", "/api/solar-return", json.dumps({"natal": person, "year": 2026}), json_headers)
+        self.assertEqual((status, json.loads(raw)["error"]["code"]), (422, "INVALID_INPUT"))
+        body = {"natal": person, "moment": {"date": "2026-09-22", "time": "09:00", "timezone": "Asia/Seoul"}}
+        status, _, raw = self.request("POST", "/api/progressions", json.dumps(body), json_headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(raw)["settings"]["angles"], "solar-arc-longitude")
+        for kind in ("solar-return", "progressions"):
+            status, _, _ = self.request("POST", "/api/share", json.dumps({"kind": kind, "input": body}), json_headers)
+            self.assertEqual(status, 422)
+        for page in ("/solar-return.html", "/progressions.html", "/solar-return.js", "/progressions.js"):
+            self.assertEqual(self.request("GET", page)[0], 200, page)
+        from natal import store
+        self.assertEqual(store.list_submissions()["total"], 0)  # multi-chart tools are never stored
+
     def test_real_chart_uses_engine_not_fixed_response(self):
         payload = {"date": "1985-07-14", "time": "21:45:00", "timezone": "America/New_York", "latitude": 40.7128, "longitude": -74.006, "place": "reference", "house_system": "P", "node_mode": "true", "time_accuracy": "reported"}
         status, _, raw = self.request("POST", "/api/chart", json.dumps(payload), {"Content-Type": "application/json"})
