@@ -33,6 +33,7 @@ class BrowserChecks(unittest.TestCase):
         self.page.on("pageerror", lambda error: self.errors.append(str(error)))
         self.page.goto(BASE_URL)
         self.page.wait_for_load_state("networkidle")
+        self.page.locator('#precision-panel > summary').click()  # settings start collapsed
         self.page.locator('#manual-location-toggle').check()
         for field, value in {'date':'1985-07-14','time':'21:45','place':'New York, New York, USA','latitude':'40.7128','longitude':'-74.006','timezone':'America/New_York'}.items():
             self.page.locator('#' + field).fill(value)

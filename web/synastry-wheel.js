@@ -52,7 +52,8 @@ export function createSynastryWheel(result, names = {}) {
 
   const aLon = new Map([...a.bodies, ...a.angles].map((item) => [item.id, item.longitude]));
   const bLon = new Map([...b.bodies, ...b.angles].map((item) => [item.id, item.longitude]));
-  for (const aspect of result.aspects) {
+  // Relations that hold only for part of an unknown birth day are listed, not drawn as fact.
+  for (const aspect of result.aspects.filter((item) => item.stability !== 'time_dependent')) {
     const from = aLon.get(aspect.a);
     const to = bLon.get(aspect.b);
     if (!Number.isFinite(from) || !Number.isFinite(to)) continue;

@@ -36,6 +36,10 @@
           </div>
 
           <div class="hero-form">
+            <div id="profile-shelf" class="profile-shelf" hidden>
+              <span class="shelf-label">저장된 프로필</span>
+              <div id="profile-chips" class="profile-chips"></div>
+            </div>
             <div class="hero-band">
               <label class="band-cell band-name"><span class="band-label">이름 · 선택</span><input id="name" name="name" autocomplete="name" placeholder="지니"></label>
               <div class="band-cell band-date">
@@ -46,7 +50,8 @@
                     <label class="lunar-leap" hidden><input type="checkbox" name="lunar_leap"> 윤달</label>
                   </span>
                 </span>
-                <input id="date" name="date" type="date" required>
+                <input id="date" name="date" type="text" inputmode="numeric" autocomplete="bday" placeholder="19900515" aria-describedby="date-hint" required>
+                <span id="date-hint" class="date-hint" aria-live="polite"></span>
               </div>
               <div class="band-cell band-time">
                 <span class="band-label"><label for="time">시각 <b>현지</b></label>
@@ -61,27 +66,32 @@
                   <button id="place-search-button" class="place-search-button" type="button" aria-label="출생지 검색">검색</button>
                 </div>
                 <ul id="place-results" class="place-results" role="listbox" aria-label="출생지 검색 결과" hidden></ul>
+                <p id="place-status" class="place-status" aria-live="polite">도시 이름을 입력하면 자동으로 검색합니다.</p>
               </div>
               <button id="calculate-button" class="calculate-button" type="submit" aria-describedby="storage-notice"><span>차트 계산</span><span aria-hidden="true">↗</span></button>
             </div>
             <div class="hero-hints">
-              <p id="place-status" class="place-status" aria-live="polite">출생지를 입력한 뒤 검색해 도시를 선택하세요. <span id="lunar-note" class="lunar-note" hidden>음력은 한국 음력 기준으로 양력으로 변환합니다.</span></p>
+              <p class="hero-hint-left">생년월일은 숫자 8자리로 입력하세요 (예: 19720827). <span id="lunar-note" class="lunar-note" hidden>음력은 한국 음력(KASI) 기준으로 양력으로 변환합니다.</span></p>
               <p class="hero-hint-right">가입 없이 계산 · 도시 검색어만 외부로 전송</p>
             </div>
-            <label class="consent-control"><input type="checkbox" name="store_consent" aria-describedby="storage-notice"> <span>이름·출생 정보 저장에 동의합니다 <b>(선택 · 180일 후 자동 삭제)</b></span></label>
+            <div class="consent-row">
+              <label class="consent-control"><input type="checkbox" name="remember_profile" checked> <span>이 브라우저에 기억하기 <b>(서버로 보내지 않음 · 다음에 바로 불러오기)</b></span></label>
+              <label class="consent-control"><input type="checkbox" name="store_consent" aria-describedby="storage-notice"> <span>이름·출생 정보 서버 저장에 동의합니다 <b>(선택 · 180일 후 자동 삭제)</b></span></label>
+            </div>
             <p id="place-warning" class="place-warning" role="alert" hidden></p>
           </div>
         </div>
       </section>
 
       <section class="input-station" aria-labelledby="input-title">
-        <div class="input-heading">
+        <details id="precision-panel" class="precision-panel">
+        <summary class="input-heading">
           <div>
             <p class="plate-number">01 / SETTINGS</p>
-            <h2 id="input-title">정밀 설정</h2>
+            <h2 id="input-title">정밀 설정 <span class="precision-state">열기</span></h2>
           </div>
-          <p class="scope-note">기본값으로도 계산됩니다. 좌표·시간대, 하우스 시스템, 어스펙트 대상을 직접 정하고 싶을 때 여세요.</p>
-        </div>
+          <p class="scope-note">기본값으로 바로 계산됩니다. 필요할 때만 여세요 · <span id="precision-summary">Placidus · True Node · Mean Lilith · 기본 어스펙트</span></p>
+        </summary>
 
         <div class="fields-grid">
           <div class="location-controls">
@@ -137,7 +147,7 @@
             </div>
           </details>
         </div>
-        </div>
+        </details>
         <div class="form-footer">
           <div class="form-notes">
             <p><strong>1900년 이후 출생을 지원합니다.</strong> 1970년 이전 출생은 당시 기록된 시간대(서머타임 등)를 적용하며 결과에 적용된 UTC 오프셋을 표시합니다. 시각을 모르면 임의의 시각 대신 <b>생시 모름</b>을 선택하세요. 현지 정오를 대표값으로 쓰고, ASC·MC·하우스·주야는 계산하지 않으며, 하루 중 바뀌는 사인·어스펙트는 따로 표시합니다.</p>
@@ -164,6 +174,7 @@
             <button id="copy-markdown" class="copy-button" type="button" disabled>해석용 MD 복사</button>
             <button id="preview-markdown" class="text-button" type="button" disabled>미리보기</button>
             <button id="download-svg" class="text-button" type="button" disabled>SVG 저장</button>
+            <button id="to-synastry" class="copy-button synastry-link" type="button" hidden>이 사람으로 궁합 보기 →</button>
           </div>
         </div>
       </div>

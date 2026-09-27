@@ -67,6 +67,8 @@ node --test tests/*.mjs
 
 현재 자동 검증(2026-09-22): Python unittest 106건(Postgres 3건은 `TEST_DATABASE_URL` 미설정 시 skip) + node --test 27건 통과(UTM 15+1건 포함). Postgres 테스트는 빈 DB에 `TEST_DATABASE_URL=postgresql://... .venv/bin/python -m unittest tests/test_deploy.py`로 실행한다(테이블을 비운다). 실제 Chrome 검사는 별도 실행. 독립 코드 리뷰에서 발견한 시간 경계·DST 선택·SVG 스타일·오래된 결과 저장 오류도 수정 및 재검토했다.
 
+2026-09-27 갱신: Python unittest 196건 통과(skip 3) + node --test 43건 통과. 실제 Chrome 검사(`tests/browser_checks.py`, `tests/place_browser_checks.py`, 로컬 서버 8765) 17건 중 16건 통과이며, `test_denied_clipboard_opens_selectable_markdown_and_download`는 1985 뉴욕 fixture에 없는 `04°52′28″`를 기대해 변경 전 코드에서도 실패한다(테스트 기대값 오류, 미수정).
+
 브라우저 검증은 실행 중인 로컬 서버와 개발 의존성이 필요하다.
 
 ```sh

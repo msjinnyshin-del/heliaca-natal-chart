@@ -2,6 +2,8 @@
 // person forms, calculation request, stale-result handling, tabs, markdown copy and private share links.
 import { mountPlaceSearch } from './place-search.js';
 import { make } from './chart-tables.js';
+import { checkBirthDate, mountBirthDate } from './birth-date.js';
+import { createProfileStore, profileLabel, takeHandoff } from './profiles.js';
 
 export const BODY_NAMES = { Sun: '태양', Moon: '달', Mercury: '수성', Venus: '금성', Mars: '화성', Jupiter: '목성', Saturn: '토성',
   Uranus: '천왕성', Neptune: '해왕성', Pluto: '명왕성', Chiron: '키론', NorthNode: '북노드', SouthNode: '남노드', Lilith: '릴리스',
@@ -49,12 +51,13 @@ function placeMarkup(p, placeLabel) {
     </div>`;
 }
 
-function personFields(prefix, label) {
+function personFields(prefix, label, allowUnknownTime) {
   const p = (id) => `${prefix}${id}`;
   const wrap = make('fieldset', 'synastry-person fields-grid');
   // Static template: only fixed ids/labels from this module, never user input.
   wrap.innerHTML = `
     <legend class="person-legend"></legend>
+    <label class="profile-picker" hidden><span>저장된 프로필</span><select id="${p('profile')}"><option value="">불러올 사람을 고르세요</option></select></label>
     <label class="field field-name"><span>이름 <em>선택</em></span><input id="${p('name')}" placeholder="이름 · 닉네임" autocomplete="off"></label>
     <div class="field field-date">
       <span><label for="${p('date')}">생년월일</label></span>
@@ -63,52 +66,87 @@ function personFields(prefix, label) {
         <label><input type="radio" name="${p('calendar')}" value="lunar"> 음력</label>
         <label class="lunar-leap" hidden><input type="checkbox" id="${p('lunar_leap')}"> 윤달</label>
       </div>
-      <input id="${p('date')}" type="date" required>
+      <input id="${p('date')}" placeholder="19900515" aria-describedby="${p('date-hint')}" required>
+      <span id="${p('date-hint')}" class="date-hint" aria-live="polite"></span>
     </div>
-    <label class="field field-time"><span>태어난 시각 <b>현지</b></span><input id="${p('time')}" type="time" step="60" required></label>
+    <div class="field field-time"><span><label for="${p('time')}">태어난 시각 <b>현지</b></label></span>
+      ${allowUnknownTime ? `<label class="time-unknown-toggle"><input type="checkbox" id="${p('time_unknown')}"> 생시 모름</label>` : ''}
+      <input id="${p('time')}" type="time" step="60" required></div>
     ${placeMarkup(p, '출생지')}`;
   wrap.querySelector('legend').textContent = label;
   return wrap;
 }
 
-function mountPerson(form, slot, onChange) {
+function mountPerson(form, slot, onChange, { allowUnknownTime = false, recents } = {}) {
   const prefix = slot.dataset.prefix;
   const label = slot.dataset.label;
-  slot.replaceWith(personFields(prefix, label));
+  slot.replaceWith(personFields(prefix, label, allowUnknownTime));
   const get = (id) => document.getElementById(`${prefix}${id}`);
   const calendar = () => form.querySelector(`input[name="${prefix}calendar"]:checked`).value;
-  for (const radio of form.querySelectorAll(`input[name="${prefix}calendar"]`)) {
-    radio.addEventListener('change', () => {
-      const lunar = calendar() === 'lunar';
-      const date = get('date');
-      const value = date.value;
-      date.type = lunar ? 'text' : 'date';
-      date.placeholder = lunar ? 'YYYY-MM-DD (음력)' : '';
-      date.value = value;
-      get('lunar_leap').closest('label').hidden = !lunar;
-      if (!lunar) get('lunar_leap').checked = false;
-    });
-  }
-  const place = mountPlaceSearch({ onChange, prefix });
+  const unknown = () => Boolean(get('time_unknown')?.checked);
+  const dateField = mountBirthDate({ input: get('date'), calendar, leap: () => get('lunar_leap').checked, hint: get('date-hint') });
+  const syncCalendar = () => {
+    const lunar = calendar() === 'lunar';
+    get('date').placeholder = lunar ? '19900515 (음력)' : '19900515';
+    get('lunar_leap').closest('label').hidden = !lunar;
+    if (!lunar) get('lunar_leap').checked = false;
+    dateField.refresh();
+  };
+  const syncTime = () => {
+    get('time').disabled = unknown();
+    get('time').required = !unknown();
+    if (unknown()) get('time').value = '';
+  };
+  for (const radio of form.querySelectorAll(`input[name="${prefix}calendar"]`)) radio.addEventListener('change', syncCalendar);
+  get('lunar_leap').addEventListener('change', () => dateField.refresh());
+  get('time_unknown')?.addEventListener('change', syncTime);
+  const place = mountPlaceSearch({ onChange, prefix, recents });
   return {
     get, place, label: slot.dataset.short || label,
     name: () => get('name').value.trim(),
     validate() {
+      const date = checkBirthDate(get('date').value, calendar());
+      if (!get('date').value.trim()) return `${this.label}의 생년월일을 입력하세요. 예: 19900515`;
+      if (!date.ok) return `${this.label} · ${date.message}`;
+      if (!unknown() && !get('time').value) {
+        return allowUnknownTime ? `${this.label}의 태어난 시각을 입력하거나 ‘생시 모름’을 선택하세요.` : `${this.label}의 태어난 시각을 입력하세요. 이 도구는 출생 시각이 필요합니다.`;
+      }
       if (!place.validate()) return `${this.label}의 출생지를 검색해 선택하거나 좌표를 직접 입력하세요.`;
-      if (!get('date').value || !get('time').value) return `${this.label}의 생년월일과 시각을 입력하세요.`;
       return '';
     },
     payload() {
       const lunar = calendar() === 'lunar';
       return {
         date: get('date').value.trim(), calendar: lunar ? 'lunar' : 'gregorian', ...(lunar ? { lunar_leap: get('lunar_leap').checked } : {}),
-        time: get('time').value, timezone: get('timezone').value.trim(),
+        ...(unknown() ? {} : { time: get('time').value }), timezone: get('timezone').value.trim(),
         latitude: get('latitude').value === '' ? null : Number(get('latitude').value),
         longitude: get('longitude').value === '' ? null : Number(get('longitude').value),
         place: get('place').value.trim(), house_system: form.querySelector('#house-system').value,
-        node_mode: form.querySelector('input[name="node_mode"]:checked').value, time_accuracy: 'reported',
+        node_mode: form.querySelector('input[name="node_mode"]:checked').value, time_accuracy: unknown() ? 'unknown' : 'reported',
         location_source: place.source(),
       };
+    },
+    /** Storable birth profile, or null while the person is incomplete. */
+    snapshot() {
+      const snapshot = place.snapshot();
+      if (!snapshot || this.validate()) return null;
+      const lunar = calendar() === 'lunar';
+      return { name: this.name(), calendar: lunar ? 'lunar' : 'gregorian', date: get('date').value.trim(),
+        lunar_leap: lunar && get('lunar_leap').checked, time_unknown: unknown(), time: unknown() ? null : get('time').value, place: snapshot };
+    },
+    /** Fills the fields from a saved profile; returns a note when this tool cannot use part of it. */
+    restore(profile) {
+      get('name').value = profile.name || '';
+      form.querySelector(`input[name="${prefix}calendar"][value="${profile.calendar === 'lunar' ? 'lunar' : 'gregorian'}"]`).checked = true;
+      syncCalendar();
+      get('lunar_leap').checked = Boolean(profile.lunar_leap);
+      get('date').value = profile.date;
+      if (get('time_unknown')) get('time_unknown').checked = Boolean(profile.time_unknown);
+      syncTime();
+      get('time').value = profile.time_unknown ? '' : profile.time;
+      place.restore(profile.place);
+      dateField.refresh();
+      return profile.time_unknown && !allowUnknownTime ? `${profileLabel(profile)}은(는) 출생 시각이 없습니다. 이 도구는 출생 시각이 필요하니 시각을 입력하세요.` : '';
     },
   };
 }
@@ -164,9 +202,71 @@ export function mountToolPage(config) {
       setBadge('다시 계산 필요', 'stale');
     }
   }
-  const people = [...document.querySelectorAll('[data-prefix]')].map((slot) => mountPerson(form, slot, invalidate));
+  const profiles = createProfileStore();
+  const recents = () => {
+    const seen = new Set();
+    return profiles.list().map((item) => item.place.source || {}).filter((source) => {
+      if (source.mode !== 'geocoded' || !Number.isInteger(source.place_id) || seen.has(source.place_id)) return false;
+      seen.add(source.place_id);
+      return true;
+    }).slice(0, 5).map((source) => ({ id: source.place_id, label: source.label, latitude: source.reference_latitude,
+      longitude: source.reference_longitude, timezone: source.reference_timezone }));
+  };
+  const people = [...document.querySelectorAll('[data-prefix]')].map((slot) => mountPerson(form, slot, invalidate,
+    { allowUnknownTime: Boolean(config.allowUnknownTime), recents }));
   const names = () => sharedNames || { a: people[0]?.name() || 'A', b: people[1]?.name() || 'B' };
-  form.addEventListener('input', (event) => { if (!event.target.id.endsWith('name')) invalidate(); });
+  const QUIET_IDS = new Set(['remember-profiles']);
+  form.addEventListener('input', (event) => { if (!event.target.id.endsWith('name') && !QUIET_IDS.has(event.target.id)) invalidate(); });
+
+  // House system / node choices live in a collapsed "정밀 설정" panel; defaults calculate as-is.
+  const shared = form.querySelector('#house-system')?.closest('.synastry-shared');
+  if (shared) {
+    const panel = make('details', 'precision-panel tool-precision');
+    const summary = make('summary', 'tool-precision-summary');
+    summary.append(make('span', '', '정밀 설정 '), make('span', 'precision-state', '열기'), make('small', 'tool-precision-note', ' 기본값 Placidus · True Node로 바로 계산됩니다'));
+    shared.replaceWith(panel);
+    panel.append(summary, shared);
+    panel.addEventListener('toggle', () => { summary.querySelector('.precision-state').textContent = panel.open ? '닫기' : '열기'; });
+  }
+
+  // Remember people in this browser (never sent to the server) and offer them in each person's picker.
+  const notes = form.querySelector('.form-notes');
+  if (notes && people.length) {
+    const remember = make('label', 'consent-control');
+    remember.innerHTML = '<input type="checkbox" id="remember-profiles" checked> <span>입력한 사람을 이 브라우저에 기억하기 <b>(서버로 보내지 않음)</b></span>';
+    notes.prepend(remember);
+  }
+  function renderPickers() {
+    const items = profiles.list();
+    for (const person of people) {
+      const select = person.get('profile');
+      select.closest('label').hidden = !items.length;
+      select.replaceChildren(make('option', '', '불러올 사람을 고르세요'), ...items.map((item) => {
+        const option = make('option', '', profileLabel(item));
+        option.value = item.id;
+        return option;
+      }));
+      select.firstChild.value = '';
+    }
+  }
+  for (const person of people) {
+    person.get('profile').addEventListener('change', (event) => {
+      const profile = profiles.get(event.target.value);
+      event.target.value = '';
+      if (!profile) return;
+      const note = person.restore(profile);
+      invalidate();
+      setMessage(note || `${profileLabel(profile)} 정보를 ${person.label}에 불러왔습니다.`, note ? 'error' : 'info');
+    });
+  }
+  function rememberPeople() {
+    if (!document.querySelector('#remember-profiles')?.checked) return;
+    for (const person of people) {
+      const snapshot = person.snapshot();
+      if (snapshot) profiles.save(snapshot);
+    }
+    renderPickers();
+  }
 
   function show(result) {
     const n = names();
@@ -202,6 +302,7 @@ export function mountToolPage(config) {
       document.querySelector('#shared-banner').hidden = true;
       currentInput = input;
       show(data);
+      rememberPeople();
       setMessage(config.doneText, 'info');
     } catch (error) {
       if (request !== serial) return;
@@ -345,7 +446,15 @@ export function mountToolPage(config) {
   }
 
   renderSaved();
+  renderPickers();
   const sharedToken = new URLSearchParams(window.location.search).get('s');
   if (sharedToken && config.shareable) openShared(sharedToken);
+  // A profile handed over from the natal chart fills the first person.
+  const handoff = !sharedToken && people.length ? takeHandoff() : null;
+  if (handoff) {
+    const note = people[0].restore(handoff);
+    setMessage(note || `네이털 차트에서 ${profileLabel(handoff)} 정보를 ${people[0].label}에 불러왔습니다.${people[1] ? ` ${people[1].label} 정보를 입력하거나 저장된 프로필에서 고르세요.` : ''}`, note ? 'error' : 'info');
+    (people[1]?.get('name') || button).focus();
+  }
   return { people, run, invalidate, setMessage, current: () => current, currentInput: () => currentInput };
 }

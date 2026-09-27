@@ -5,6 +5,8 @@ import { mountInterpretationHandoff } from './interpretation-handoff.js';
 import { mountPlaceSearch } from './place-search.js';
 import { buildAngleEntries, buildAspectGrid, buildHouseGrid, buildPositionRows, make, sectLabel } from './chart-tables.js';
 import { buildClientContext, captureAttribution, getVisitorId } from './client-context.js';
+import { mountBirthDate } from './birth-date.js';
+import { createProfileStore, profileLabel, setHandoff } from './profiles.js';
 
 const form = document.querySelector('#chart-form');
 const workbench = document.querySelector('#chart-workbench');
@@ -43,7 +45,9 @@ document.querySelector('#delete-my-data').addEventListener('click', async () => 
     setMessage('이 브라우저에서는 저장 기록을 식별할 수 없습니다.', 'error');
     return;
   }
-  if (!window.confirm('이 브라우저에서 계산한 모든 저장 기록을 삭제합니다. 되돌릴 수 없습니다.')) return;
+  if (!window.confirm('이 브라우저에서 계산한 모든 저장 기록(서버)과 이 브라우저에 기억한 프로필을 삭제합니다. 되돌릴 수 없습니다.')) return;
+  profiles.clear();
+  renderProfileShelf();
   try {
     const response = await fetch('/api/my-data/delete', {
       method: 'POST',
@@ -69,7 +73,87 @@ const handoff = mountInterpretationHandoff({
     ? {chart: currentResult, payload: currentPayload, name: byName('name').value.trim()} : null,
   onMessage: setMessage,
 });
-const placeSearch = mountPlaceSearch({onChange: invalidateResult});
+const profiles = createProfileStore();
+const placeSearch = mountPlaceSearch({onChange: invalidateResult, recents: recentPlaces});
+const dateField = mountBirthDate({
+  input: form.elements.namedItem('date'), calendar: selectedCalendar,
+  leap: () => form.elements.namedItem('lunar_leap').checked, hint: document.querySelector('#date-hint'),
+});
+const synastryLink = document.querySelector('#to-synastry');
+let currentProfile = null;
+
+function recentPlaces() {
+  const seen = new Set();
+  return profiles.list().map((item) => item.place).filter((place) => {
+    const source = place.source || {};
+    if (source.mode !== 'geocoded' || !Number.isInteger(source.place_id) || seen.has(source.place_id)) return false;
+    seen.add(source.place_id);
+    return true;
+  }).slice(0, 5).map((place) => ({ id: place.source.place_id, label: place.source.label || place.label,
+    latitude: place.source.reference_latitude, longitude: place.source.reference_longitude, timezone: place.source.reference_timezone }));
+}
+
+function profileFromForm() {
+  const place = placeSearch.snapshot();
+  if (!place) return null;
+  return { name: byName('name').value.trim(), calendar: selectedCalendar(), date: byName('date').value.trim(),
+    lunar_leap: selectedCalendar() === 'lunar' && byName('lunar_leap').checked,
+    time_unknown: timeUnknown(), time: timeUnknown() ? null : byName('time').value, place };
+}
+
+function applyProfile(profile) {
+  byName('name').value = profile.name || '';
+  form.querySelector(`input[name="calendar"][value="${profile.calendar === 'lunar' ? 'lunar' : 'gregorian'}"]`).checked = true;
+  syncCalendarControls();
+  byName('lunar_leap').checked = Boolean(profile.lunar_leap);
+  byName('date').value = profile.date;
+  byName('time_unknown').checked = Boolean(profile.time_unknown);
+  syncTimeControls();
+  if (!profile.time_unknown) byName('time').value = profile.time;
+  placeSearch.restore(profile.place);
+  dateField.refresh();
+  invalidateResult();
+}
+
+function renderProfileShelf() {
+  const shelf = document.querySelector('#profile-shelf');
+  const items = profiles.list();
+  shelf.hidden = !items.length;
+  document.querySelector('#profile-chips').replaceChildren(...items.map((item) => {
+    const chip = make('span', 'profile-chip');
+    const load = make('button', 'profile-load', profileLabel(item));
+    load.type = 'button';
+    load.title = `${item.place.label} · 불러와서 계산`;
+    load.addEventListener('click', () => { applyProfile(item); form.requestSubmit(); });
+    const remove = make('button', 'profile-remove', '×');
+    remove.type = 'button';
+    remove.setAttribute('aria-label', `${profileLabel(item)} 프로필 삭제`);
+    remove.addEventListener('click', () => {
+      if (!window.confirm(`“${profileLabel(item)}”을(를) 이 브라우저에서 지울까요?`)) return;
+      profiles.remove(item.id);
+      renderProfileShelf();
+    });
+    chip.append(load, remove);
+    return chip;
+  }));
+}
+
+const precisionSummary = document.querySelector('#precision-summary');
+function syncPrecisionSummary() {
+  const house = byName('house_system').selectedOptions[0]?.textContent.split(' · ')[0] || 'Placidus';
+  const minor = form.querySelectorAll('input[name="minor_aspect"]:checked').length;
+  const orb = Number(byName('orb_scale').value);
+  precisionSummary.textContent = `${house} · ${byName('node_mode').value === 'mean' ? 'Mean' : 'True'} Node · ${byName('lilith_mode').value === 'osculating' ? 'Osculating' : 'Mean'} Lilith · ${minor ? `부가 어스펙트 ${minor}종` : '기본 어스펙트'}${orb !== 1 ? ` · 오브 ${Math.round(orb * 100)}%` : ''}${document.querySelector('#manual-location-toggle').checked ? ' · 좌표 직접 입력' : ''}`;
+}
+document.querySelector('#precision-panel').addEventListener('toggle', (event) => {
+  event.currentTarget.querySelector('.precision-state').textContent = event.currentTarget.open ? '닫기' : '열기';
+});
+synastryLink.addEventListener('click', () => {
+  if (!currentProfile) return;
+  // Only the name can change without invalidating the result; hand over the one on screen now.
+  if (!setHandoff({ ...currentProfile, name: byName('name').value.trim() })) { setMessage('이 브라우저에서는 정보를 넘길 수 없습니다. 시너스트리에서 다시 입력하세요.', 'error'); return; }
+  window.location.href = '/synastry.html';
+});
 
 // The interpretation prompt is built around ASC, houses and sect, so it stays off for unknown birth time.
 function interpretationAvailable() {
@@ -102,23 +186,18 @@ function selectedCalendar() {
 
 function syncCalendarControls() {
   const lunar = selectedCalendar() === 'lunar';
-  const dateInput = byName('date');
-  const value = dateInput.value;
-  // Lunar months can have day 30 in any month (e.g. 2월 30일), which type=date rejects.
-  dateInput.type = lunar ? 'text' : 'date';
-  dateInput.inputMode = lunar ? 'numeric' : '';
-  dateInput.placeholder = lunar ? 'YYYY-MM-DD (음력)' : '';
-  dateInput.pattern = lunar ? '\\d{4}-\\d{2}-\\d{2}' : '';
-  dateInput.value = value;
+  // The date is a typed text field for both calendars (lunar months can have a 30th day).
+  byName('date').placeholder = lunar ? '19900515 (음력)' : '19900515';
   form.querySelector('.lunar-leap').hidden = !lunar;
   document.querySelector('#lunar-note').hidden = !lunar;
-  document.querySelector('#date-calendar-hint').textContent = lunar ? '음력 · Korean lunar' : '양력 · Gregorian';
   if (!lunar) byName('lunar_leap').checked = false;
+  dateField.refresh();
 }
 
 for (const radio of form.querySelectorAll('input[name="calendar"]')) {
   radio.addEventListener('change', () => { syncCalendarControls(); invalidateResult(); });
 }
+byName('lunar_leap').addEventListener('change', () => dateField.refresh());
 byName('time_unknown').addEventListener('change', syncTimeControls);
 syncTimeControls();
 
@@ -292,7 +371,14 @@ function renderResult(result, payload) {
   resultTitle.textContent = displayName ? `${displayName}의 네이털 차트` : '네이털 차트';
   resultSubtitle.textContent = `${payload.calendar === 'lunar' ? `음력 ${payload.date}${payload.lunar_leap ? '(윤달)' : ''} → 양력 ${result.normalized?.solar_date || '—'}` : payload.date} ${payload.time_accuracy === 'unknown' ? '생시 미상' : payload.time} · ${payload.place} · ${result.settings?.house_system || payload.house_system} / ${result.settings?.node_mode || payload.node_mode} node`;
   workbench.setAttribute('aria-busy', 'false');
-  setExportAvailability(result.status === 'calculated' && result.calculation_status === 'success');
+  const success = result.status === 'calculated' && result.calculation_status === 'success';
+  setExportAvailability(success);
+  currentProfile = success ? profileFromForm() : null;
+  if (currentProfile && byName('remember_profile').checked) {
+    currentProfile = profiles.save(currentProfile) || currentProfile;
+    renderProfileShelf();
+  }
+  synastryLink.hidden = !currentProfile;
   setBadge(result.status === 'partial' ? '부분 결과' : '현재 입력 결과', result.status === 'partial' ? 'stale' : '');
 }
 
@@ -364,7 +450,7 @@ form.addEventListener('submit', (event) => {
     return;
   }
   if (!form.checkValidity()) {
-    form.querySelector(':invalid')?.closest('details')?.setAttribute('open', '');
+    for (let node = form.querySelector(':invalid')?.closest('details'); node; node = node.parentElement?.closest('details')) node.open = true;
     form.reportValidity();
     setMessage('필수 입력과 좌표 범위를 확인하세요.', 'error');
     return;
@@ -378,6 +464,8 @@ form.addEventListener('submit', (event) => {
 });
 
 function invalidateResult() {
+  synastryLink.hidden = true;
+  syncPrecisionSummary();
   requestState.resetFold();
   controller?.abort();
   requestSerial += 1;
@@ -391,7 +479,7 @@ function invalidateResult() {
 }
 
 form.addEventListener('input', (event) => {
-  if (event.target.name === 'store_consent') return;  // storage choice never changes the chart
+  if (['store_consent', 'remember_profile'].includes(event.target.name)) return;  // storage choices never change the chart
   if (event.target.name === 'name') {
     if (currentResult) resultTitle.textContent = event.target.value.trim() ? `${event.target.value.trim()}의 네이털 차트` : '네이털 차트';
     handoff.setAvailable(interpretationAvailable());
@@ -445,5 +533,8 @@ downloadButton.addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
-// No personal birth record is prefilled or calculated without an explicit submit.
+// No personal birth record is prefilled or calculated without an explicit action
+// (a saved-profile chip is one: it loads and calculates only when clicked).
 setExportAvailability(false);
+renderProfileShelf();
+syncPrecisionSummary();

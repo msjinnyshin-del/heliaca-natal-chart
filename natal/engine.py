@@ -126,6 +126,24 @@ def normalize_location_source(payload, latitude, longitude, timezone_name):
     return dict(source)
 
 
+def unknown_day_track(payload, body_ids):
+    """Longitudes of `body_ids` sampled every STEP_MINUTES over an unknown-time birth's whole local day.
+
+    Multi-chart tools (synastry) use it to decide which inter-chart relations hold all day; linear
+    interpolation between 10-minute samples is off by far less than an arcsecond, even for the Moon.
+    Call only after calculate_chart has accepted the same payload in unknown mode.
+    """
+    numbers = {body_id: number for body_id, _, _, number in BODY_DEFS}
+    numbers.update({"Chiron": swe.CHIRON, "NorthNode": swe.TRUE_NODE if payload.get("node_mode", "true") == "true" else swe.MEAN_NODE})
+    solar_payload, _ = convert_calendar(payload)
+    day = resolve_unknown_day(solar_payload)
+    with engine_session():
+        day_tt = [swe.utc_to_jd(t.year, t.month, t.day, t.hour, t.minute, t.second, swe.GREG_CAL)[0] for t in (day["start"], day["end"])]
+        clock = DayClock(day["start"], day["end"], day_tt[0], day_tt[1], day["zoneinfo"])
+        return [{body_id: checked_calc(clock.jd_tt(k / clock.steps), numbers[body_id])[0][0] for body_id in body_ids}
+                for k in range(clock.steps + 1)]
+
+
 UNKNOWN_EXCLUDED = ["ASC", "MC", "DSC", "IC", "houses", "Fortune", "Spirit", "sect"]
 # Placidus, Whole Sign, Equal, Koch, Porphyry, Regiomontanus, Campanus, Alcabitius (Swiss one-letter codes).
 HOUSE_SYSTEMS = ("P", "W", "E", "K", "O", "R", "C", "B")

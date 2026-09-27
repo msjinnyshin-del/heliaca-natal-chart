@@ -208,14 +208,17 @@ class UnknownTimeChart(unittest.TestCase):
         self.assertEqual(chart["normalized"]["solar_date"], MOON_INGRESS_DAY)
 
     def test_multi_chart_tools_reject_unknown_time(self):
+        """Composite and transits still need a time; synastry accepts it (see test_synastry)."""
         from natal.composite import calculate_composite
         from natal.synastry import calculate_synastry
         from natal.transits import calculate_transits
         known = {**SEOUL, "date": "1985-07-14", "time": "21:45"}
         blind = {**SEOUL, "date": MOON_INGRESS_DAY, "time_accuracy": "unknown"}
         moment = {"date": "2026-01-01", "time": "12:00", "timezone": "Asia/Seoul"}
-        calls = [lambda: calculate_synastry({"person_a": known, "person_b": blind}),
-                 lambda: calculate_composite({"person_a": blind, "person_b": known}),
+        # The Moon changes sign that day, so its relations to the known chart cannot all be settled.
+        moon = [x for x in calculate_synastry({"person_a": known, "person_b": blind})["overlays"]["b_in_a"] if x["body"] == "Moon"]
+        self.assertEqual(moon[0]["stability"], "time_dependent")
+        calls = [lambda: calculate_composite({"person_a": blind, "person_b": known}),
                  lambda: calculate_transits({"natal": blind, "moment": moment})]
         for call in calls:
             with self.assertRaises(ChartError) as caught:

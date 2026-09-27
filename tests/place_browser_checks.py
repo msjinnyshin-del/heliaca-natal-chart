@@ -74,6 +74,7 @@ class PlaceBrowserChecks(unittest.TestCase):
     def test_manual_override_warns_and_exiting_requires_reselection(self):
         self.stub_places()
         self.select_city()
+        self.page.locator('#precision-panel > summary').click()  # settings start collapsed
         self.page.locator('#manual-location-toggle').check()
         self.page.locator('#latitude').fill('37.7')
         expect(self.page.locator('#place-warning')).to_contain_text('5′')
