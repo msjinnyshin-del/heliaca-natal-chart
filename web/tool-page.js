@@ -2,7 +2,7 @@
 // person forms, calculation request, stale-result handling, tabs, markdown copy and private share links.
 import { mountPlaceSearch } from './place-search.js';
 import { make } from './chart-tables.js';
-import { checkBirthDate, mountBirthDate } from './birth-date.js';
+import { checkBirthDate, mountBirthDate, syncChoicePills } from './birth-date.js';
 import { createProfileStore, profileLabel, takeHandoff } from './profiles.js';
 
 export const BODY_NAMES = { Sun: '태양', Moon: '달', Mercury: '수성', Venus: '금성', Mars: '화성', Jupiter: '목성', Saturn: '토성',
@@ -214,6 +214,7 @@ export function mountToolPage(config) {
   };
   const people = [...document.querySelectorAll('[data-prefix]')].map((slot) => mountPerson(form, slot, invalidate,
     { allowUnknownTime: Boolean(config.allowUnknownTime), recents }));
+  const refreshPills = syncChoicePills(form);
   const names = () => sharedNames || { a: people[0]?.name() || 'A', b: people[1]?.name() || 'B' };
   const QUIET_IDS = new Set(['remember-profiles']);
   form.addEventListener('input', (event) => { if (!event.target.id.endsWith('name') && !QUIET_IDS.has(event.target.id)) invalidate(); });
@@ -255,6 +256,7 @@ export function mountToolPage(config) {
       event.target.value = '';
       if (!profile) return;
       const note = person.restore(profile);
+      refreshPills();
       invalidate();
       setMessage(note || `${profileLabel(profile)} 정보를 ${person.label}에 불러왔습니다.`, note ? 'error' : 'info');
     });
@@ -453,6 +455,7 @@ export function mountToolPage(config) {
   const handoff = !sharedToken && people.length ? takeHandoff() : null;
   if (handoff) {
     const note = people[0].restore(handoff);
+    refreshPills();
     setMessage(note || `네이털 차트에서 ${profileLabel(handoff)} 정보를 ${people[0].label}에 불러왔습니다.${people[1] ? ` ${people[1].label} 정보를 입력하거나 저장된 프로필에서 고르세요.` : ''}`, note ? 'error' : 'info');
     (people[1]?.get('name') || button).focus();
   }

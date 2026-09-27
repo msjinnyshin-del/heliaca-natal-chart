@@ -5,7 +5,7 @@ import { mountInterpretationHandoff } from './interpretation-handoff.js';
 import { mountPlaceSearch } from './place-search.js';
 import { buildAngleEntries, buildAspectGrid, buildHouseGrid, buildPositionRows, make, sectLabel } from './chart-tables.js';
 import { buildClientContext, captureAttribution, getVisitorId } from './client-context.js';
-import { mountBirthDate } from './birth-date.js';
+import { mountBirthDate, syncChoicePills } from './birth-date.js';
 import { createProfileStore, profileLabel, setHandoff } from './profiles.js';
 
 const form = document.querySelector('#chart-form');
@@ -101,6 +101,8 @@ function profileFromForm() {
     time_unknown: timeUnknown(), time: timeUnknown() ? null : byName('time').value, place };
 }
 
+const refreshPills = syncChoicePills(form);
+
 function applyProfile(profile) {
   byName('name').value = profile.name || '';
   form.querySelector(`input[name="calendar"][value="${profile.calendar === 'lunar' ? 'lunar' : 'gregorian'}"]`).checked = true;
@@ -112,6 +114,7 @@ function applyProfile(profile) {
   if (!profile.time_unknown) byName('time').value = profile.time;
   placeSearch.restore(profile.place);
   dateField.refresh();
+  refreshPills();  // programmatic .checked changes fire no change event
   invalidateResult();
 }
 

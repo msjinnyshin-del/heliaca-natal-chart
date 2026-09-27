@@ -82,3 +82,15 @@ export function mountBirthDate({ input, calendar, leap = () => false, hint }) {
   });
   return { refresh };
 }
+
+/** Mirrors each radio/checkbox's checked state onto its label (`.is-checked`) for browsers without :has(). */
+export function syncChoicePills(root = document) {
+  const update = () => {
+    for (const input of root.querySelectorAll('.calendar-toggle input, .time-unknown-toggle input')) {
+      input.closest('label')?.classList.toggle('is-checked', input.checked);
+    }
+  };
+  root.addEventListener('change', update);
+  update();
+  return update;
+}

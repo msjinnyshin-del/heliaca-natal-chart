@@ -583,3 +583,27 @@ footer { display: flex; align-items: center; justify-content: space-between; gap
 .field-date .calendar-toggle { font-size: .86rem; }
 .field-time .time-unknown-toggle { font-size: .8rem; }
 .profile-chip button { font-size: .8rem; }
+
+/* Choice pills (양력/음력/윤달/생시 모름). The native radio/checkbox is visually hidden: the field rules
+   (border 0, transparent background, width 100%) make iOS WebKit draw nothing, so the whole label is the
+   control and its checked state is shown by the pill itself. `.is-checked` covers browsers without :has(). */
+.calendar-toggle, .hero-band .calendar-toggle { gap: .4rem; }
+.calendar-toggle label, .time-unknown-toggle {
+  position: relative; display: inline-flex; align-items: center; gap: .3rem; margin: 0;
+  padding: .38rem .8rem; border: 1px solid var(--rule-strong); border-radius: 999px;
+  color: var(--ink-soft); background: rgba(2, 6, 6, .5); cursor: pointer; line-height: 1;
+  -webkit-tap-highlight-color: transparent; user-select: none;
+}
+.calendar-toggle label[hidden] { display: none; }
+.calendar-toggle input, .time-unknown-toggle input,
+.band-cell .calendar-toggle input, .band-cell .time-unknown-toggle input, .field .calendar-toggle input {
+  position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; opacity: 0; pointer-events: none;
+}
+.calendar-toggle label:has(input:checked), .time-unknown-toggle:has(input:checked),
+.calendar-toggle label.is-checked, .time-unknown-toggle.is-checked {
+  border-color: var(--teal); color: var(--void); background: var(--teal); font-weight: 650;
+}
+.time-unknown-toggle::before { content: '○'; font-size: .8em; }
+.time-unknown-toggle:has(input:checked)::before, .time-unknown-toggle.is-checked::before { content: '✓'; }
+.calendar-toggle label:has(input:focus-visible), .time-unknown-toggle:has(input:focus-visible) { outline: 2px solid var(--teal-bright); outline-offset: 2px; }
+.band-label .time-unknown-toggle { margin-left: .5rem; }
