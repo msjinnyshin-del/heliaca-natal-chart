@@ -158,9 +158,9 @@ synastryLink.addEventListener('click', () => {
   window.location.href = '/synastry.html';
 });
 
-// The interpretation prompt is built around ASC, houses and sect, so it stays off for unknown birth time.
+// Unknown birth time gets its own prompt (no ASC, houses or sect; day-varying items stay conditional).
 function interpretationAvailable() {
-  return !downloadButton.disabled && currentResult?.normalized?.time_accuracy === 'reported';
+  return !downloadButton.disabled && ['reported', 'unknown'].includes(currentResult?.normalized?.time_accuracy);
 }
 
 function setExportAvailability(available) {
@@ -432,7 +432,7 @@ async function calculate(payload) {
     }
     renderResult(data, payload);
     setMessage(data.normalized?.time_accuracy === 'unknown'
-      ? '생시 미상으로 계산했습니다. 정오 대표 위치이며 ASC·하우스는 없습니다. 해석용 복사는 출생 시각이 있을 때만 지원합니다.'
+      ? '생시 미상으로 계산했습니다. 정오 대표 위치이며 ASC·하우스는 없습니다. 해석용 MD는 하루 내내 유지되는 배치만 확정으로 담습니다.'
       : '현재 입력으로 계산을 완료했습니다.', 'info');
   } catch (error) {
     if (error.name === 'AbortError') return;

@@ -62,7 +62,7 @@ test('names and places remain quoted table data, not HTML or new prompt sections
 test('rejects partial, blocked or incomplete result instead of inventing chart data', () => {
   const unknownTime = structuredClone(chart);
   unknownTime.normalized.time_accuracy = 'unknown';
-  assert.throws(() => exporter.buildInterpretationMarkdown(unknownTime), /완성된/);
+  assert.throws(() => exporter.buildInterpretationMarkdown(unknownTime), /생시 미상/);  // relabelled chart still has angles
   for (const status of ['partial', 'blocked']) {
     assert.throws(() => exporter.buildInterpretationMarkdown({...chart,status}), /완성된/);
   }
@@ -101,4 +101,40 @@ print(json.dumps(calculate_chart(dict(date='1985-07-14',time='21:45:00',timezone
   assert.match(md, /minor Quincunx, SemiSquare, Sesquiquadrate, Quintile/);
   assert.match(md, /orb ×1\.2/);
   assert.doesNotMatch(md, /부가 어스펙트는 계산 범위 밖/);
+});
+
+// 1970-09-06 Seoul: the Moon stays in Scorpio all day, but Sun–Moon sextile holds only from 04:04 local.
+const blindRun = spawnSync('.venv/bin/python', ['-c', `import json
+from natal.engine import calculate_chart
+print(json.dumps(calculate_chart(dict(date='1970-09-06',timezone='Asia/Seoul',latitude=37.566,longitude=126.9784,place='서울',time_accuracy='unknown'))))`], { encoding: 'utf8', cwd: new URL('..', import.meta.url) });
+assert.equal(blindRun.status, 0, blindRun.stderr);
+const blind = JSON.parse(blindRun.stdout);
+
+test('unknown birth time exports its own prompt: no angles or houses, day-varying items kept conditional', () => {
+  const md = exporter.buildInterpretationMarkdown(blind, { name: '그여' });
+  assert.match(md, /출생 시각 미상/);
+  assert.match(md, /ASC\(상승궁\)·MC·DSC·IC, 하우스, 주야\(sect\).*계산하지 않았습니다/);
+  assert.doesNotMatch(md, /## 12하우스 커스프|## 각도점|차트 룰러: 현대/);
+  const moon = blind.bodies.find(p => p.id === 'Moon');
+  assert.ok(md.includes(moon.time_sensitivity.range.start.position) && md.includes(moon.time_sensitivity.range.end.position));
+  const partial = blind.aspects.filter(a => a.stability === 'partial');
+  const stable = blind.aspects.filter(a => a.stability === 'stable');
+  assert.ok(partial.length && stable.length);
+  const [confirmed, conditional] = md.split('## 어스펙트 — 출생 시각에 따라 달라짐');
+  const confirmedTable = confirmed.split('## 어스펙트 — 하루 내내 유지')[1];
+  for (const a of stable) assert.match(confirmedTable, new RegExp(`\\| ${a.a} \\| ${a.b} \\| ${a.name} \\|`));
+  for (const a of partial) {
+    assert.doesNotMatch(confirmedTable, new RegExp(`\\| ${a.a} \\| ${a.b} \\| ${a.name} \\|`));
+    assert.match(conditional, new RegExp(`\\| ${a.a} \\| ${a.b} \\| ${a.name} \\|`));
+  }
+  assert.match(md, /"그여"/);
+});
+
+test('unknown-time export refuses a chart that carries angles or lacks day ranges', () => {
+  const withAngles = structuredClone(blind);
+  withAngles.angles = [{ id: 'ASC', longitude: 1, sign_index: 0, position: '양 1°' }];
+  assert.throws(() => exporter.buildInterpretationMarkdown(withAngles), /각도점/);
+  const noRange = structuredClone(blind);
+  delete noRange.bodies[1].time_sensitivity;
+  assert.throws(() => exporter.buildInterpretationMarkdown(noRange), /범위/);
 });
