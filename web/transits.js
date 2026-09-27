@@ -1,7 +1,7 @@
 import { createSynastryWheel } from './synastry-wheel.js';
 import { formatWheelPosition } from './chart-profile.js';
 import { make } from './chart-tables.js';
-import { ASPECT_NAMES, BODY_NAMES, formatOrb, mountToolPage, withMore } from './tool-page.js';
+import { ASPECT_NAMES, BODY_NAMES, TIME_DEPENDENT_NOTE, conditionalHeading, mountToolPage, orbText, splitStability, withMore } from './tool-page.js';
 
 const dateInput = document.querySelector('#moment-date');
 const timeInput = document.querySelector('#moment-time');
@@ -16,13 +16,13 @@ function setNow() {
 }
 setNow();
 
-const MOTION = { applying: '접근', separating: '분리', stationary: '정지' };
+const MOTION = { applying: '접근', separating: '분리', stationary: '정지', time_dependent: '접근/분리는 출생 시각에 따라' };
 
 function aspectRow(aspect) {
   const [glyph, name] = ASPECT_NAMES[aspect.name];
   const tr = make('tr', `aspect-${aspect.name.toLowerCase()}`);
   tr.append(make('td', '', `트랜짓 ${BODY_NAMES[aspect.transit]}${aspect.retrograde ? ' R' : ''}`), make('td', 'aspect-name', `${glyph} ${name}`),
-    make('td', '', `네이털 ${BODY_NAMES[aspect.natal]}`), make('td', 'mono', `${formatOrb(aspect.orb)} · ${MOTION[aspect.motion]}`));
+    make('td', '', `네이털 ${BODY_NAMES[aspect.natal]}`), make('td', 'mono', `${orbText(aspect)} · ${MOTION[aspect.motion]}`));
   return tr;
 }
 
@@ -35,25 +35,30 @@ function table(items) {
 }
 
 function render(result, n) {
-  const houses = new Map(result.transit_houses.map((item) => [item.body, item.house]));
+  const blind = result.natal.normalized.time_accuracy === 'unknown';
+  const houses = new Map((result.transit_houses || []).map((item) => [item.body, item.house]));
   document.querySelector('#chart-stage').replaceChildren(createSynastryWheel(
     { person_a: result.natal, person_b: result.transit, aspects: result.aspects }, { a: n.a, b: '트랜짓' }));
   document.querySelector('#result-title').textContent = `${n.a === 'A' ? '나' : n.a}의 트랜짓`;
   document.querySelector('#result-subtitle').textContent = `${result.transit.input.date} ${result.transit.input.time} (${result.transit.normalized.timezone}) 기준 · ${result.aspects.length}개 트랜짓 어스펙트`;
-  document.querySelector('#positions-body').replaceChildren(...result.transit.bodies.filter((b) => houses.has(b.id)).map((body) => {
+  const shown = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto', 'Chiron', 'NorthNode'];
+  document.querySelector('#positions-body').replaceChildren(...result.transit.bodies.filter((b) => shown.includes(b.id)).map((body) => {
     const tr = make('tr');
-    tr.append(make('td', '', `${body.symbol} ${BODY_NAMES[body.id]}`), make('td', '', formatWheelPosition(body)), make('td', '', String(houses.get(body.id))));
+    tr.append(make('td', '', `${body.symbol} ${BODY_NAMES[body.id]}`), make('td', '', formatWheelPosition(body)), make('td', '', houses.has(body.id) ? String(houses.get(body.id)) : '—'));
     return tr;
   }));
   const register = document.querySelector('#aspects-register');
   register.className = 'detail-content';
-  const slow = result.aspects.filter((a) => a.slow);
-  const fast = result.aspects.filter((a) => !a.slow);
+  const [settled, conditional] = splitStability(result.aspects);
+  const slow = settled.filter((a) => a.slow);
+  const fast = settled.filter((a) => !a.slow);
   register.replaceChildren(
     make('p', 'register-note', '느린 행성(목성~명왕성·키론·노드)의 트랜짓이 몇 주~몇 년의 큰 흐름, 빠른 행성은 며칠 단위의 분위기입니다. 접근=점점 정확해지는 중, 분리=지나가는 중.'),
+    ...(blind ? [make('p', 'register-note', '생시 미상: 네이털 ASC·MC·하우스가 없어 트랜짓 행성의 하우스와 각도점 트랜짓은 계산하지 않았습니다.')] : []),
     ...(slow.length ? [make('h4', 'register-subhead', '큰 흐름 · 느린 행성'), table(slow)] : []),
     ...withMore(fast.length ? [make('h4', 'register-subhead', '요즘의 날씨 · 빠른 행성'), table(fast.slice(0, 8))] : [],
-      fast.length > 8 ? [table(fast.slice(8))] : [], '빠른 행성 어스펙트', fast.length - 8));
+      fast.length > 8 ? [table(fast.slice(8))] : [], '빠른 행성 어스펙트', fast.length - 8),
+    ...(conditional.length ? [conditionalHeading(conditional.length), make('p', 'register-note', TIME_DEPENDENT_NOTE), table(conditional)] : []));
   if (!result.aspects.length) register.append(make('p', '', '허용 orb 안의 트랜짓 어스펙트가 없습니다.'));
   const evidence = document.querySelector('#evidence-register');
   evidence.className = 'detail-content';
@@ -61,7 +66,7 @@ function render(result, n) {
   for (const [term, value] of [
     ['Rule', `${result.rule_version} · ${Object.entries(result.settings.orbs).map(([k, v]) => `${k} ${v}°`).join(' · ')}`],
     ['Note', result.settings.note],
-    ['Natal UTC', `${result.natal.normalized.utc} (${result.natal.normalized.offset} ${result.natal.normalized.timezone})`],
+    ['Natal UTC', `${result.natal.normalized.utc} (${result.natal.normalized.offset} ${result.natal.normalized.timezone})${blind ? ' · 생시 미상: 정오 대표값, 하루 전체 범위 검사' : ''}`],
     ['Transit UTC', `${result.transit.normalized.utc} (${result.transit.normalized.offset} ${result.transit.normalized.timezone})`],
     ['Engine', `${result.natal.metadata.engine} ${result.natal.metadata.engine_version}`],
   ]) {
@@ -73,14 +78,24 @@ function render(result, n) {
 }
 
 function markdown(result, n) {
+  const blind = result.natal.normalized.time_accuracy === 'unknown';
   const lines = [`# ${n.a}의 트랜짓 (${result.transit.input.date} ${result.transit.input.time} ${result.transit.normalized.timezone})`, '',
-    '아래는 네이털 차트 위에 해당 시점의 행성을 겹친 트랜짓입니다. 느린 행성 트랜짓을 중심으로 지금 시기의 주제와 타이밍(접근/분리)을 한국어로 해석해 주세요. 예언이 아니라 성찰의 틀로 써 주세요. 계산값은 수정하지 마세요.', '',
-    `## 네이털 (${result.natal.input.date} ${result.natal.input.time} · ${result.natal.input.place})`];
-  for (const body of result.natal.bodies.filter((b) => BODY_NAMES[b.id] && !['Fortune', 'Spirit', 'SouthNode', 'Lilith'].includes(b.id))) lines.push(`- ${BODY_NAMES[body.id]}: ${body.position} · ${body.house}H`);
-  lines.push('', '## 트랜짓 어스펙트');
-  for (const a of result.aspects) lines.push(`- 트랜짓 ${BODY_NAMES[a.transit]}${a.retrograde ? '(R)' : ''} ${ASPECT_NAMES[a.name][1]} 네이털 ${BODY_NAMES[a.natal]} · orb ${a.orb.toFixed(2)}° · ${MOTION[a.motion]}`);
-  lines.push('', '## 트랜짓 행성의 네이털 하우스');
-  for (const item of result.transit_houses) lines.push(`- ${BODY_NAMES[item.body]} → ${item.house}H`);
+    '아래는 네이털 차트 위에 해당 시점의 행성을 겹친 트랜짓입니다. 느린 행성 트랜짓을 중심으로 지금 시기의 주제와 타이밍(접근/분리)을 한국어로 해석해 주세요. 예언이 아니라 성찰의 틀로 써 주세요. 계산값은 수정하지 마세요.'
+      + (blind ? ' 네이털 출생 시각을 몰라 ASC·MC·하우스가 없습니다. 하우스·각도점 트랜짓을 추정하지 말고, "조건부" 어스펙트는 출생 시각에 따라 성립할 수도 있다고만 언급하세요.' : ''), '',
+    `## 네이털 (${result.natal.input.date} ${blind ? '생시 미상 — 정오 대표 위치' : result.natal.input.time} · ${result.natal.input.place})`];
+  for (const body of result.natal.bodies.filter((b) => BODY_NAMES[b.id] && !['Fortune', 'Spirit', 'SouthNode', 'Lilith'].includes(b.id))) {
+    const changes = blind && body.time_sensitivity && !body.time_sensitivity.sign_stable ? ' (이날 사인 변동)' : '';
+    lines.push(`- ${BODY_NAMES[body.id]}: ${body.position}${blind ? '' : ` · ${body.house}H`}${changes}`);
+  }
+  const [settled, conditional] = splitStability(result.aspects);
+  const line = (a) => `- 트랜짓 ${BODY_NAMES[a.transit]}${a.retrograde ? '(R)' : ''} ${ASPECT_NAMES[a.name][1]} 네이털 ${BODY_NAMES[a.natal]} · orb ${a.stability === 'time_dependent' ? `${a.orb_range[0].toFixed(2)}–${a.orb_range[1].toFixed(2)}` : a.orb.toFixed(2)}° · ${MOTION[a.motion]}`;
+  lines.push('', blind ? '## 트랜짓 어스펙트 — 확정 (네이털 출생 시각과 무관)' : '## 트랜짓 어스펙트');
+  lines.push(...settled.map(line));
+  if (conditional.length) lines.push('', '## 트랜짓 어스펙트 — 조건부 (네이털 출생 시각에 따라)', ...conditional.map(line));
+  if (result.transit_houses) {
+    lines.push('', '## 트랜짓 행성의 네이털 하우스');
+    for (const item of result.transit_houses) lines.push(`- ${BODY_NAMES[item.body]} → ${item.house}H`);
+  }
   return lines.join('\n');
 }
 
@@ -89,6 +104,7 @@ const page = mountToolPage({
   momentLabel: '트랜짓 시점',
   endpoint: '/api/transits',
   shareable: false,
+  allowUnknownTime: true,
   busyText: '네이털과 트랜짓 시점을 계산하는 중입니다.',
   doneText: '트랜짓 계산을 완료했습니다.',
   extraValidate: () => (!dateInput.value || !timeInput.value || !zoneInput.value.trim() ? '트랜짓 날짜·시각·시간대를 입력하세요.' : ''),

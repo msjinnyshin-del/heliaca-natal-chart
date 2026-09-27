@@ -126,22 +126,45 @@ def normalize_location_source(payload, latitude, longitude, timezone_name):
     return dict(source)
 
 
-def unknown_day_track(payload, body_ids):
-    """Longitudes of `body_ids` sampled every STEP_MINUTES over an unknown-time birth's whole local day.
-
-    Multi-chart tools (synastry) use it to decide which inter-chart relations hold all day; linear
-    interpolation between 10-minute samples is off by far less than an arcsecond, even for the Moon.
-    Call only after calculate_chart has accepted the same payload in unknown mode.
-    """
+def _track_numbers(node_mode="true", lilith_mode="mean"):
     numbers = {body_id: number for body_id, _, _, number in BODY_DEFS}
-    numbers.update({"Chiron": swe.CHIRON, "NorthNode": swe.TRUE_NODE if payload.get("node_mode", "true") == "true" else swe.MEAN_NODE})
+    numbers.update({"Chiron": swe.CHIRON, "NorthNode": swe.TRUE_NODE if node_mode == "true" else swe.MEAN_NODE,
+                    "Lilith": LILITH_MODES.get(lilith_mode, LILITH_MODES["mean"])[1]})
+    return numbers
+
+
+def ephemeris_track(jds_tt, body_ids, node_mode="true", lilith_mode="mean"):
+    """{body: longitude} at each TT Julian day, with the same flags and checks as a chart. SouthNode = NorthNode + 180°."""
+    numbers = _track_numbers(node_mode, lilith_mode)
+    wanted = [body_id for body_id in body_ids if body_id != "SouthNode"]
+    if "SouthNode" in body_ids and "NorthNode" not in wanted:
+        wanted.append("NorthNode")
+    with engine_session():
+        samples = [{body_id: checked_calc(jd, numbers[body_id])[0][0] for body_id in wanted} for jd in jds_tt]
+    for sample in samples:
+        if "SouthNode" in body_ids:
+            sample["SouthNode"] = (sample["NorthNode"] + 180) % 360
+    return samples
+
+
+def unknown_day_jds(payload):
+    """TT Julian days every STEP_MINUTES across an unknown-time birth's whole local day (first and last instant included)."""
     solar_payload, _ = convert_calendar(payload)
     day = resolve_unknown_day(solar_payload)
     with engine_session():
         day_tt = [swe.utc_to_jd(t.year, t.month, t.day, t.hour, t.minute, t.second, swe.GREG_CAL)[0] for t in (day["start"], day["end"])]
-        clock = DayClock(day["start"], day["end"], day_tt[0], day_tt[1], day["zoneinfo"])
-        return [{body_id: checked_calc(clock.jd_tt(k / clock.steps), numbers[body_id])[0][0] for body_id in body_ids}
-                for k in range(clock.steps + 1)]
+    clock = DayClock(day["start"], day["end"], day_tt[0], day_tt[1], day["zoneinfo"])
+    return [clock.jd_tt(k / clock.steps) for k in range(clock.steps + 1)]
+
+
+def unknown_day_track(payload, body_ids):
+    """Longitudes of `body_ids` sampled every STEP_MINUTES over an unknown-time birth's whole local day.
+
+    Multi-chart tools use it to decide which relations hold all day; linear interpolation between
+    10-minute samples is off by far less than an arcsecond, even for the Moon.
+    Call only after calculate_chart has accepted the same payload in unknown mode.
+    """
+    return ephemeris_track(unknown_day_jds(payload), body_ids, payload.get("node_mode", "true"), payload.get("lilith_mode", "mean"))
 
 
 UNKNOWN_EXCLUDED = ["ASC", "MC", "DSC", "IC", "houses", "Fortune", "Spirit", "sect"]

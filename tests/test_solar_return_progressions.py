@@ -101,7 +101,6 @@ class SolarReturn(unittest.TestCase):
             ({"natal": NATAL, "year": True, "location": SEOUL}, "INVALID_INPUT"),
             ({"natal": NATAL, "year": 2026, "location": {**SEOUL, "latitude": 95}}, "INVALID_INPUT"),
             ({"natal": NATAL, "year": 2026, "location": {**SEOUL, "extra": 1}}, "INVALID_INPUT"),
-            ({"natal": {**NATAL, "time": None, "time_accuracy": "unknown"}, "year": 2026, "location": SEOUL}, "INVALID_INPUT"),
             ({"natal": NATAL, "year": 2026, "location": SEOUL, "more": 1}, "INVALID_INPUT"),
         ]
         for payload, code in cases:
@@ -192,7 +191,6 @@ class SecondaryProgressions(unittest.TestCase):
         cases = [
             ({"natal": NATAL, "moment": {**self.MOMENT, "date": "1980-01-01"}}, "INVALID_INPUT"),
             ({"natal": NATAL, "moment": {**self.MOMENT, "date": "2101-01-01"}}, "UNSUPPORTED_DATE"),
-            ({"natal": {**NATAL, "time": None, "time_accuracy": "unknown"}, "moment": self.MOMENT}, "INVALID_INPUT"),
             ({"natal": NATAL, "moment": {**self.MOMENT, "latitude": 1}}, "INVALID_INPUT"),
             ({"natal": NATAL}, "INVALID_INPUT"),
         ]

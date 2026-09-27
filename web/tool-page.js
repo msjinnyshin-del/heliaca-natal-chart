@@ -16,6 +16,16 @@ export function formatOrb(x) {
   return `${Math.floor(x)}°${String(Math.floor((x % 1) * 60)).padStart(2, '0')}′`;
 }
 
+// ---- unknown birth time: ranges and conditional relations (same wording on every tool page) ----
+export const TIME_DEPENDENT_NOTE = '생시를 모르는 사람의 천체(주로 달)가 하루 중 어느 때 태어났느냐에 따라 orb 안에 들어오거나 벗어납니다. orb는 가능한 범위입니다. 확정 결과로 해석하지 마세요.';
+export const isTimeDependent = (item) => item?.stability === 'time_dependent';
+/** [settled, conditional] */
+export const splitStability = (items) => [items.filter((item) => !isTimeDependent(item)), items.filter(isTimeDependent)];
+export const orbText = (aspect) => (isTimeDependent(aspect) ? `${formatOrb(aspect.orb_range[0])}–${formatOrb(aspect.orb_range[1])}` : formatOrb(aspect.orb));
+/** "전갈 04°41′06″ → 전갈 17°12′45″" for a body with a time_range, else ''. */
+export const rangeText = (item) => (item?.time_range ? `${item.time_range.start.position} → ${item.time_range.end.position}` : '');
+export const conditionalHeading = (count) => make('h4', 'register-subtitle', `출생 시각에 따라 달라지는 어스펙트 ${count}개`);
+
 export function withMore(visible, hidden, label, count) {
   const nodes = [...visible];
   if (hidden.length) {

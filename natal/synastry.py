@@ -4,10 +4,9 @@ A person with an unknown birth time (spec §11) contributes no angles or houses.
 the whole local birth day: an inter-aspect is `stable` when it stays in orb all day and `time_dependent` when
 it holds only for part of the day; overlays list every house the body passes through during the day.
 """
-import math
-
 from .errors import ChartError
 from .rules import PLANETS, house_for, separation_of
+from .timeband import orb_range, sweep
 
 SYNASTRY_RULE_VERSION = "synastry-v3"
 # Inter-chart orbs are conventionally tighter than natal ones; luminaries get +1°.
@@ -37,27 +36,7 @@ def _points(chart):
 
 def _sweep(track, body_id, noon):
     """(low, high) offsets from the representative longitude over the day; (0, 0) for a known time."""
-    if track is None:
-        return 0.0, 0.0
-    offsets = [(sample[body_id] - noon + 180) % 360 - 180 for sample in track]
-    return min(offsets), max(offsets)
-
-
-def orb_range(difference, low, high, target):
-    """Min/max orb from `target` while the directed difference A−B runs over [difference+low, difference+high].
-
-    The orb is piecewise linear in the difference, so extremes sit at the ends or at kinks
-    (separation 0°/180°, or exactly the aspect angle).
-    """
-    start, end = difference + low, difference + high
-    points = [start, end]
-    for kink in (0.0, 180.0, target, -target):
-        k = kink + 360 * math.ceil((start - kink) / 360)
-        while k <= end:
-            points.append(k)
-            k += 360
-    orbs = [abs(separation_of(point, 0.0) - target) for point in points]
-    return min(orbs), max(orbs)
+    return (0.0, 0.0) if track is None else sweep([sample[body_id] for sample in track], noon)
 
 
 def inter_aspects(chart_a, chart_b, track_a=None, track_b=None):
