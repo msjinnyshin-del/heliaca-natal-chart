@@ -19,7 +19,7 @@ ADMIN_ROOT = WEB_ROOT / "admin"
 MAX_REQUEST_BYTES = 16_384
 # Admin static files reachable before login; everything else under /admin needs a session.
 ADMIN_PUBLIC_FILES = {"login.html", "login.js", "admin.css"}
-ADMIN_PRIVATE_FILES = {"index.html", "admin.js"}
+ADMIN_PRIVATE_FILES = {"index.html", "admin.js", "engine-check.html", "engine-check.js"}
 # Hostnames Vercel assigns to a deployment; readable at runtime as system environment variables.
 VERCEL_HOST_VARS = ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL")
 
@@ -30,6 +30,8 @@ CALCULATORS = {"/api/synastry": ("natal.synastry", "calculate_synastry"),
                "/api/solar-return": ("natal.solar_return", "calculate_solar_return"),
                "/api/progressions": ("natal.progressions", "calculate_progressions")}
 SHARE_KINDS = {"synastry": CALCULATORS["/api/synastry"], "composite": CALCULATORS["/api/composite"]}
+# Admin engine inspector: every calculator by name, run without recording a submission.
+ENGINE_TOOLS = {"chart": ("natal.engine", "calculate_chart"), **{route[len("/api/"):]: spec for route, spec in CALCULATORS.items()}}
 
 
 def load_calculator(spec):
@@ -565,6 +567,9 @@ class ChartHandler(BaseHTTPRequestHandler):
     def admin_api_post(self, route):
         from natal import store, utm
         parts = route.strip("/").split("/")[2:]  # after api/admin
+        if len(parts) == 2 and parts[0] == "engine":
+            self.admin_engine(parts[1])
+            return
         handlers = {
             ("utm", "channels"): lambda body: (201, utm.create_channel(body)),
             ("utm", "campaigns"): lambda body: (201, utm.create_campaign(body)),
@@ -598,6 +603,27 @@ class ChartHandler(BaseHTTPRequestHandler):
             self.error_json(404, "NOT_FOUND", "대상을 찾을 수 없거나 이미 그 상태입니다.")
             return
         self.send_json(status, value)
+
+    def admin_engine(self, tool):
+        """Runs one calculator for the admin engine inspector. Nothing is recorded or stored."""
+        spec = ENGINE_TOOLS.get(tool)
+        if spec is None:
+            self.error_json(404, "NOT_FOUND", "알 수 없는 계산 도구입니다.")
+            return
+        payload = self.json_body()
+        if payload is None:
+            return
+        payload.pop("client", None)
+        from natal.errors import ChartError
+        try:
+            result = load_calculator(spec)(payload)
+        except ChartError as error:
+            self.error_json(422, error.code, str(error), getattr(error, "details", None))
+            return
+        except Exception:
+            self.error_json(500, "CALCULATION_FAILED", "계산에 실패했습니다. 엔진과 데이터 설치 상태를 확인해 주세요.")
+            return
+        self.send_json(200, result)
 
     def admin_login(self):
         from natal import admin_auth

@@ -87,7 +87,7 @@ function personFields(prefix, label, allowUnknownTime) {
   return wrap;
 }
 
-function mountPerson(form, slot, onChange, { allowUnknownTime = false, recents } = {}) {
+export function mountPerson(form, slot, onChange, { allowUnknownTime = false, recents } = {}) {
   const prefix = slot.dataset.prefix;
   const label = slot.dataset.label;
   slot.replaceWith(personFields(prefix, label, allowUnknownTime));

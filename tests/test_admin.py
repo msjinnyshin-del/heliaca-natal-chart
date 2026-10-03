@@ -288,6 +288,56 @@ class AdminTests(unittest.TestCase):
         status, _, _ = self.request("GET", "/admin/../admin/admin.js")
         self.assertIn(status, (303, 404))
 
+    # ---- engine inspector -------------------------------------------------------
+
+    def test_engine_inspector_files_require_login(self):
+        for path in ("/admin/engine-check.html", "/admin/engine-check.js"):
+            with self.subTest(path=path):
+                status, headers, _ = self.request("GET", path)
+                self.assertEqual(status, 303)
+                self.assertEqual(headers["location"], "/admin/login")
+        cookie = self.login()
+        status, headers, body = self.request("GET", "/admin/engine-check.html", headers={"Cookie": cookie})
+        self.assertEqual(status, 200)
+        self.assertIn(b"engine-check.js", body)
+        self.assertIn("noindex", headers["x-robots-tag"])
+        status, _, body = self.request("GET", "/admin/engine-check.js", headers={"Cookie": cookie})
+        self.assertEqual(status, 200)
+        self.assertIn(b"/api/admin/engine/", body)
+
+    def test_engine_inspector_runs_every_tool_without_recording(self):
+        cookie = self.login()
+        other = {**CHART, "date": "1990-05-15", "time": "08:30:00", "timezone": "Asia/Seoul", "latitude": 37.5665, "longitude": 126.978, "place": "Seoul"}
+        moment = {"date": "2026-10-03", "time": "12:00", "timezone": "Asia/Seoul"}
+        cases = {
+            "chart": (CHART, "bodies"),
+            "synastry": ({"person_a": CHART, "person_b": other}, "overlays"),
+            "composite": ({"person_a": CHART, "person_b": other}, "composite"),
+            "transits": ({"natal": CHART, "moment": moment}, "transit"),
+            "solar-return": ({"natal": CHART, "year": 2026, "location": {"latitude": 37.5665, "longitude": 126.978, "timezone": "Asia/Seoul", "place": "Seoul"}}, "exact"),
+            "progressions": ({"natal": CHART, "moment": moment}, "progressed"),
+        }
+        for tool, (payload, key) in cases.items():
+            with self.subTest(tool=tool):
+                status, _, data = self.admin("POST", f"/api/admin/engine/{tool}", cookie, payload)
+                self.assertEqual(status, 200, data)
+                self.assertEqual(data["status"], "calculated")
+                self.assertIn(key, data)
+        status, _, data = self.admin("GET", "/api/admin/submissions", cookie)
+        self.assertEqual(status, 200)
+        self.assertEqual(data["total"], 0)
+
+    def test_engine_inspector_errors(self):
+        cookie = self.login()
+        self.assertEqual(self.admin("POST", "/api/admin/engine/chart", cookie, CHART, origin=False)[0], 403)
+        self.assertEqual(self.admin("POST", "/api/admin/engine/nope", cookie, CHART)[0], 404)
+        self.assertEqual(self.request("POST", "/api/admin/engine/chart", CHART, {"Origin": self.origin})[0], 401)
+        status, _, data = self.admin("POST", "/api/admin/engine/chart", cookie, {**CHART, "house_system": "ZZ"})
+        self.assertEqual(status, 422)
+        self.assertEqual(data["error"]["code"], "INVALID_INPUT")
+        status, _, data = self.admin("POST", "/api/admin/engine/synastry", cookie, {"person_a": CHART, "person_b": {**CHART, "time_accuracy": "unknown", "time": None}})
+        self.assertIn(status, (200, 422))
+
 
 if __name__ == "__main__":
     unittest.main()

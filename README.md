@@ -33,6 +33,10 @@ cd natal-chart   # 이 저장소 폴더
 
 `natal/progressions.py`(`secondary-progression-v1`): `{natal, moment}`. 1일 = 평균 회귀년 1년(365.24219일). 진행 천체는 진행 순간의 실제 천체력, 각도점은 황경 솔라 아크(MC 이동 후 출생 위도에서 ASC·커스프)이며 Fortune·Spirit·주야는 제외한다. 진행→네이털 어스펙트는 주요 5종·오브 1°. 저장·공유하지 않는다.
 
+### 관리자 엔진 검토 (`/admin/engine-check.html`, `POST /api/admin/engine/<tool>`)
+
+관리자 로그인 뒤 접근하는 대조용 페이지. 출생 입력 → 6개 계산(`chart`·`synastry`·`composite`·`transits`·`solar-return`·`progressions`)의 반환값 전체를 섹션별 표로 펼치고, 결과 전체를 Markdown 또는 원본 JSON으로 복사한다. 참조 앱 옆에 띄워 필드별로 수치를 맞춰 보는 용도이며 서비스 프론트와 무관하다. 이 경로의 계산은 `submissions`에 기록하지 않는다. 빠른 입력 프리셋은 브라우저 localStorage에만 저장된다.
+
 새 환경에서는 Python 3.9 이상과 아래 설치가 필요하다.
 
 ```sh
