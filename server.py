@@ -32,6 +32,26 @@ CALCULATORS = {"/api/synastry": ("natal.synastry", "calculate_synastry"),
 SHARE_KINDS = {"synastry": CALCULATORS["/api/synastry"], "composite": CALCULATORS["/api/composite"]}
 # Admin engine inspector: every calculator by name, run without recording a submission.
 ENGINE_TOOLS = {"chart": ("natal.engine", "calculate_chart"), **{route[len("/api/"):]: spec for route, spec in CALCULATORS.items()}}
+# Admin engine inspector quick-input people live in an environment variable (JSON array of browser
+# profile objects), never in the repository: the repository is public and these are real birth data.
+PRESETS_VAR = "NATAL_ADMIN_PRESETS"
+
+
+def admin_presets():
+    """Preset people for the engine inspector from NATAL_ADMIN_PRESETS; malformed entries are dropped."""
+    try:
+        items = json.loads(os.environ.get(PRESETS_VAR) or "[]")
+    except ValueError:
+        return []
+    if not isinstance(items, list):
+        return []
+    valid = []
+    for item in items:
+        place = item.get("place") if isinstance(item, dict) else None
+        if (isinstance(place, dict) and isinstance(item.get("date"), str) and isinstance(item.get("name"), str)
+                and isinstance(place.get("timezone"), str) and all(isinstance(place.get(k), (int, float)) for k in ("latitude", "longitude"))):
+            valid.append(item)
+    return valid
 
 
 def load_calculator(spec):
@@ -499,7 +519,10 @@ class ChartHandler(BaseHTTPRequestHandler):
         from natal.errors import ChartError
         parts = route.strip("/").split("/")  # api, admin, ...
         try:
-            if parts[2:] == ["utm-stats"]:
+            if parts[2:] == ["engine", "presets"]:
+                self.query_params(set())
+                self.send_json(200, {"presets": admin_presets()})
+            elif parts[2:] == ["utm-stats"]:
                 params = self.query_params({"from", "to"})
                 from natal import utm
                 self.send_json(200, utm.utm_stats(params.get("from"), params.get("to")))

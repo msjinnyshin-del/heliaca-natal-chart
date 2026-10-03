@@ -35,7 +35,7 @@ cd natal-chart   # 이 저장소 폴더
 
 ### 관리자 엔진 검토 (`/admin/engine-check.html`, `POST /api/admin/engine/<tool>`)
 
-관리자 로그인 뒤 접근하는 대조용 페이지. 출생 입력 → 6개 계산(`chart`·`synastry`·`composite`·`transits`·`solar-return`·`progressions`)의 반환값 전체를 섹션별 표로 펼치고, 결과 전체를 Markdown 또는 원본 JSON으로 복사한다. 참조 앱 옆에 띄워 필드별로 수치를 맞춰 보는 용도이며 서비스 프론트와 무관하다. 이 경로의 계산은 `submissions`에 기록하지 않는다. 빠른 입력 프리셋은 브라우저 localStorage에만 저장된다.
+관리자 로그인 뒤 접근하는 대조용 페이지. 출생 입력 → 6개 계산(`chart`·`synastry`·`composite`·`transits`·`solar-return`·`progressions`)의 반환값 전체를 섹션별 표로 펼치고, 결과 전체를 Markdown 또는 원본 JSON으로 복사한다. 참조 앱 옆에 띄워 필드별로 수치를 맞춰 보는 용도이며 서비스 프론트와 무관하다. 이 경로의 계산은 `submissions`에 기록하지 않는다. 빠른 입력의 내장 명단은 환경 변수 `NATAL_ADMIN_PRESETS`(브라우저 프로필 형식의 JSON 배열: `name`·`calendar`·`date`·`time`·`time_unknown`·`place{label,latitude,longitude,timezone,source}`)에서 오며, 실존 인물 출생 정보라 저장소에는 두지 않는다(`admin-presets.json`은 git-ignore). 로컬은 `.claude/launch.json`, 운영은 `vercel env add NATAL_ADMIN_PRESETS production < admin-presets.json`으로 넣고 재배포한다. "A 저장"으로 추가한 사람은 브라우저 localStorage에만 남는다.
 
 새 환경에서는 Python 3.9 이상과 아래 설치가 필요하다.
 

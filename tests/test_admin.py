@@ -327,6 +327,21 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["total"], 0)
 
+    def test_engine_inspector_presets_come_from_environment(self):
+        people = [{"name": "A", "calendar": "gregorian", "date": "1990-05-15", "time": "08:30", "time_unknown": False,
+                   "place": {"label": "Seoul", "latitude": 37.5665, "longitude": 126.978, "timezone": "Asia/Seoul"}},
+                  {"name": "broken"}, "junk"]
+        self.assertEqual(self.request("GET", "/api/admin/engine/presets")[0], 401)
+        cookie = self.login()
+        with patch.dict(os.environ, {server.PRESETS_VAR: json.dumps(people)}):
+            status, _, data = self.admin("GET", "/api/admin/engine/presets", cookie)
+        self.assertEqual(status, 200)
+        self.assertEqual([p["name"] for p in data["presets"]], ["A"])
+        with patch.dict(os.environ, {server.PRESETS_VAR: "not json"}):
+            self.assertEqual(self.admin("GET", "/api/admin/engine/presets", cookie)[2], {"presets": []})
+        with patch.dict(os.environ, {server.PRESETS_VAR: ""}):
+            self.assertEqual(self.admin("GET", "/api/admin/engine/presets", cookie)[2], {"presets": []})
+
     def test_engine_inspector_errors(self):
         cookie = self.login()
         self.assertEqual(self.admin("POST", "/api/admin/engine/chart", cookie, CHART, origin=False)[0], 403)

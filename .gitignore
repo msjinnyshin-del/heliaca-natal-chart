@@ -18,3 +18,6 @@ data/admin.sqlite3*
 skills-lock.json
 ADMIN_CREDENTIALS.txt
 design/
+
+# Admin engine inspector quick-input people (real birth data; load into NATAL_ADMIN_PRESETS, never commit)
+admin-presets.json

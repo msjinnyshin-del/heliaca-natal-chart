@@ -26,7 +26,7 @@ const KEY_LABELS = {
   stability: '안정성', in_orb_at_representative: '대표 시각 orb 내', windows: '성립 구간', strength: 'strength', strong: 'strong', body: '천체',
   slow: '느린 천체', natal: '네이털', transit: '트랜짓', progressed: '진행', time_sensitivity: '시간 민감도', time_range: '하루 범위',
 };
-const state = { tool: 'chart', result: null, sections: [], serial: 0 };
+const state = { tool: 'chart', result: null, sections: [], serial: 0, presets: [] };
 
 // ---- formatting ---------------------------------------------------------------
 
@@ -290,10 +290,11 @@ function selectTool(id) {
 
 function renderPresets() {
   const host = document.querySelector('#eng-preset-list');
-  const items = [SAMPLE, ...profiles.list()];
+  const builtIn = [SAMPLE, ...state.presets.map((p, i) => ({ ...p, id: `preset-${i}` }))];
+  const items = [...builtIn, ...profiles.list()];
   host.replaceChildren(...items.map((profile) => {
-    const chip = make('span', 'eng-chip');
-    chip.append(make('span', 'eng-chip-label', profile.id === 'sample' ? profile.name : profileLabel(profile)));
+    const chip = make('span', `eng-chip${profile.id.startsWith('preset-') || profile.id === 'sample' ? ' is-builtin' : ''}`);
+    chip.append(make('span', 'eng-chip-label', profile.id === 'sample' || profile.id.startsWith('preset-') ? `${profile.name}${profile.time_unknown ? ' · 생시 모름' : ''}` : profileLabel(profile)));
     for (const [index, short] of [[0, 'A'], [1, 'B']]) {
       const b = make('button', 'text-button', short);
       b.type = 'button';
@@ -306,7 +307,7 @@ function renderPresets() {
       });
       chip.append(b);
     }
-    if (profile.id !== 'sample') {
+    if (profile.id !== 'sample' && !profile.id.startsWith('preset-')) {
       const del = make('button', 'text-button adm-danger', '✕');
       del.type = 'button';
       del.title = '이 브라우저에서 삭제';
@@ -477,6 +478,19 @@ copyMd.addEventListener('click', () => copy(markdown(state.tool, state.input, st
 copyJson.addEventListener('click', () => copy(JSON.stringify(state.result, null, 2), '원본 JSON을 복사했습니다.'));
 form.addEventListener('submit', run);
 
+async function loadPresets() {
+  try {
+    const response = await fetch('/api/admin/engine/presets', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (response.status === 401) { window.location.assign('/admin/login'); return; }
+    const data = await response.json().catch(() => null);
+    state.presets = Array.isArray(data?.presets) ? data.presets : [];
+  } catch {
+    state.presets = [];
+  }
+  renderPresets();
+}
+
 renderTools();
 renderPresets();
 selectTool('chart');
+loadPresets();
