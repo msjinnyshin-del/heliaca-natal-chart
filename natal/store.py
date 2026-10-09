@@ -15,7 +15,7 @@ from .rules import SIGNS
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = ROOT / "data" / "admin.sqlite3"
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 RAW_RETENTION_DAYS = 180
 # Columns that identify a person or reproduce their birth data; cleared on expiry, never stored without consent.
 RAW_COLUMNS = ("raw_input", "display_name", "place", "summary", "fingerprint")
@@ -180,6 +180,16 @@ MIGRATIONS = {
     CREATE INDEX submissions_raw_held ON submissions(created_at) WHERE raw_input IS NOT NULL OR display_name IS NOT NULL OR place IS NOT NULL OR summary IS NOT NULL OR fingerprint IS NOT NULL;
     PRAGMA user_version = 5;
     COMMIT;
+    """,
+    # Admin engine inspector quick-input people (natal/presets.py); `profile` is the normalized JSON person.
+    6: """
+    CREATE TABLE IF NOT EXISTS admin_presets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        profile TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
     """,
 }
 

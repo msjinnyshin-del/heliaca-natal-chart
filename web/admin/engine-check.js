@@ -5,6 +5,7 @@ import { make } from '/chart-tables.js';
 import { createNatalWheel } from '/chart.js';
 import { createProfileStore, profileLabel } from '/profiles.js';
 import { syncChoicePills } from '/birth-date.js';
+import { dayInYear, parseYears } from '/admin/engine-bundle.js';
 
 const TOOLS = [
   { id: 'chart', label: '네이털', people: 1 },
@@ -13,6 +14,7 @@ const TOOLS = [
   { id: 'transits', label: '트랜짓', people: 1, moment: true },
   { id: 'solar-return', label: '솔라 리턴', people: 1, solar: true },
   { id: 'progressions', label: '프로그레션', people: 1, moment: true },
+  { id: 'bundle', label: '전체 리포트 (연도별)', people: 1, bundle: true },
 ];
 // Fixed test person used by the engine regression tests (not a real person).
 const SAMPLE = { id: 'sample', name: '테스트 NY 1985', calendar: 'gregorian', date: '1985-07-14', time: '21:45', time_unknown: false,
@@ -26,7 +28,7 @@ const KEY_LABELS = {
   stability: '안정성', in_orb_at_representative: '대표 시각 orb 내', windows: '성립 구간', strength: 'strength', strong: 'strong', body: '천체',
   slow: '느린 천체', natal: '네이털', transit: '트랜짓', progressed: '진행', time_sensitivity: '시간 민감도', time_range: '하루 범위',
 };
-const state = { tool: 'chart', result: null, sections: [], serial: 0, presets: [] };
+const state = { tool: 'chart', result: null, sections: [], serial: 0, presets: [], envPresets: [], editing: null };
 
 // ---- formatting ---------------------------------------------------------------
 
@@ -205,8 +207,8 @@ function renderSection(section) {
 
 const mdCell = (value) => String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
 
-function sectionMarkdown(section) {
-  const lines = [`## ${section.title}`, ''];
+function sectionMarkdown(section, level = 2) {
+  const lines = [`${'#'.repeat(level)} ${section.title}`, ''];
   if (section.note) lines.push(section.note, '');
   if ('json' in section) {
     lines.push('```json', JSON.stringify(section.json, null, 2), '```', '');
@@ -240,6 +242,7 @@ const badge = document.querySelector('#freshness-badge');
 const button = document.querySelector('#calculate-button');
 const copyMd = document.querySelector('#copy-markdown');
 const copyJson = document.querySelector('#copy-json');
+const downloadMd = document.querySelector('#download-markdown');
 const resultHost = document.querySelector('#eng-result');
 const profiles = createProfileStore();
 
@@ -248,7 +251,7 @@ const setBadge = (text, kind = '') => { badge.textContent = text; badge.classNam
 
 function invalidate() {
   state.serial += 1;
-  if (state.result) { setBadge('다시 계산 필요', 'stale'); copyMd.disabled = true; copyJson.disabled = true; }
+  if (state.result) { setBadge('다시 계산 필요', 'stale'); copyMd.disabled = true; copyJson.disabled = true; downloadMd.disabled = true; }
 }
 
 const people = [...form.querySelectorAll('[data-prefix]')].map((slot) => mountPerson(form, slot, invalidate, { allowUnknownTime: true, recents: () => [] }));
@@ -278,56 +281,180 @@ function selectTool(id) {
     b.setAttribute('aria-selected', String(item.id === id));
     b.tabIndex = item.id === id ? 0 : -1;
   }
-  const bFieldset = people[1].get('name').closest('fieldset');
-  bFieldset.hidden = t.people < 2;
-  document.querySelector('#eng-save-b').hidden = t.people < 2;
+  syncPersonB();
   document.querySelector('#eng-moment').hidden = !t.moment;
-  document.querySelector('#eng-return').hidden = !t.solar;
+  document.querySelector('#eng-return').hidden = !t.solar && !t.bundle;
+  document.querySelector('#return-year-field').hidden = Boolean(t.bundle);
+  document.querySelector('#eng-bundle').hidden = !t.bundle;
   invalidate();
 }
 
+/** Person B is used by two-person tools, and by the bundle only when it is asked to include synastry/composite. */
+const usesB = () => tool().people >= 2 || (tool().bundle && document.querySelector('#bundle-with-b').checked);
+function syncPersonB() {
+  people[1].get('name').closest('fieldset').hidden = !usesB();
+  document.querySelector('#eng-save-b').hidden = !usesB();
+}
+
 // ---- presets ----------------------------------------------------------------------
+// Registered people live in the admin database (/api/admin/engine/presets). People still only in the
+// NATAL_ADMIN_PRESETS environment variable and old browser-saved profiles are shown so they can be moved in.
+
+const PRESETS_API = '/api/admin/engine/presets';
+const presetLabel = (profile) => `${profile.name}${profile.time_unknown ? ' · 생시 모름' : ''}`;
+
+async function presetRequest(method, path = '', body) {
+  const response = await fetch(`${PRESETS_API}${path}`, {
+    method, credentials: 'same-origin',
+    headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (response.status === 401) { window.location.assign('/admin/login'); return null; }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error?.message || `HTTP ${response.status}`);
+  return data;
+}
+
+function chipButton(text, title, onClick, extra = '') {
+  const b = make('button', `text-button${extra ? ` ${extra}` : ''}`, text);
+  b.type = 'button';
+  b.title = title;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function fillButtons(profile) {
+  return [[0, 'A'], [1, 'B']].map(([index, short]) => chipButton(short, `${short}에 채우기`, () => {
+    const note = people[index].restore(profile);
+    // Refilling A from another chip ends an edit, so "A 내용으로 저장" can never overwrite the wrong person.
+    if (index === 0 && state.editing) { state.editing = null; renderPresets(); }
+    if (index === 1 && !usesB()) setMessage('B는 시너스트리·컴포지트에서만 씁니다.', 'info');
+    else setMessage(note || `${short}에 ${profile.name || profileLabel(profile)}을(를) 채웠습니다.`, note ? 'error' : 'info');
+    invalidate();
+  }));
+}
 
 function renderPresets() {
   const host = document.querySelector('#eng-preset-list');
-  const builtIn = [SAMPLE, ...state.presets.map((p, i) => ({ ...p, id: `preset-${i}` }))];
-  const items = [...builtIn, ...profiles.list()];
-  host.replaceChildren(...items.map((profile) => {
-    const chip = make('span', `eng-chip${profile.id.startsWith('preset-') || profile.id === 'sample' ? ' is-builtin' : ''}`);
-    chip.append(make('span', 'eng-chip-label', profile.id === 'sample' || profile.id.startsWith('preset-') ? `${profile.name}${profile.time_unknown ? ' · 생시 모름' : ''}` : profileLabel(profile)));
-    for (const [index, short] of [[0, 'A'], [1, 'B']]) {
-      const b = make('button', 'text-button', short);
-      b.type = 'button';
-      b.title = `${short}에 채우기`;
-      b.addEventListener('click', () => {
-        const note = people[index].restore(profile);
-        if (index === 1 && tool().people < 2) setMessage('B는 시너스트리·컴포지트에서만 씁니다.', 'info');
-        else setMessage(note || `${short}에 ${profile.name || profileLabel(profile)}을(를) 채웠습니다.`, note ? 'error' : 'info');
-        invalidate();
-      });
-      chip.append(b);
-    }
-    if (profile.id !== 'sample' && !profile.id.startsWith('preset-')) {
-      const del = make('button', 'text-button adm-danger', '✕');
-      del.type = 'button';
-      del.title = '이 브라우저에서 삭제';
-      del.addEventListener('click', () => { profiles.remove(profile.id); renderPresets(); });
-      chip.append(del);
-    }
-    return chip;
-  }));
+  const chips = [];
+  const sample = make('span', 'eng-chip is-builtin');
+  sample.append(make('span', 'eng-chip-label', SAMPLE.name), ...fillButtons(SAMPLE));
+  chips.push(sample);
+  for (const profile of state.presets) {
+    const chip = make('span', `eng-chip${state.editing?.id === profile.id ? ' is-editing' : ''}`);
+    chip.append(make('span', 'eng-chip-label', presetLabel(profile)), ...fillButtons(profile),
+      chipButton('✎', '수정: A 칸에 불러와 고친 뒤 저장', () => startEdit(profile)),
+      chipButton('✕', '명단에서 삭제', () => removePreset(profile), 'adm-danger'));
+    chips.push(chip);
+  }
+  for (const profile of state.envPresets) {
+    const chip = make('span', 'eng-chip is-builtin is-env');
+    chip.title = '환경 변수 NATAL_ADMIN_PRESETS의 사람 (읽기 전용). "가져오기"로 명단에 옮기면 수정·삭제할 수 있습니다.';
+    chip.append(make('span', 'eng-chip-label', `${presetLabel(profile)} · env`), ...fillButtons(profile));
+    chips.push(chip);
+  }
+  for (const profile of profiles.list()) {
+    const chip = make('span', 'eng-chip is-local');
+    chip.title = '이 브라우저(localStorage)에만 저장된 사람';
+    chip.append(make('span', 'eng-chip-label', profileLabel(profile)), ...fillButtons(profile),
+      chipButton('⇪', '서버 명단에 등록', () => register(profile, () => profiles.remove(profile.id))),
+      chipButton('✕', '이 브라우저에서 삭제', () => { profiles.remove(profile.id); renderPresets(); }, 'adm-danger'));
+    chips.push(chip);
+  }
+  host.replaceChildren(...chips);
+  const importButton = document.querySelector('#eng-import-env');
+  importButton.hidden = !state.envPresets.length;
+  importButton.textContent = `환경 변수 ${state.envPresets.length}명 가져오기`;
+  const bar = document.querySelector('#eng-edit-bar');
+  bar.hidden = !state.editing;
+  if (state.editing) document.querySelector('#eng-edit-name').textContent = state.editing.name;
+}
+
+async function loadPresets() {
+  try {
+    const data = await presetRequest('GET');
+    if (!data) return;
+    state.presets = Array.isArray(data.presets) ? data.presets : [];
+    state.envPresets = Array.isArray(data.env_presets) ? data.env_presets : [];
+    if (state.editing && !state.presets.some((p) => p.id === state.editing.id)) state.editing = null;
+  } catch (error) {
+    setMessage(`빠른 입력 명단을 불러오지 못했습니다: ${error.message}`, 'error');
+  }
+  renderPresets();
+}
+
+/** Registers a snapshot of a person; `after` runs only when the server accepted it. */
+async function register(profile, after) {
+  try {
+    const saved = await presetRequest('POST', '', profile);
+    if (!saved) return;
+    after?.();
+    setMessage(`${presetLabel(saved)}을(를) 명단에 등록했습니다.`, 'info');
+    await loadPresets();
+  } catch (error) {
+    setMessage(`등록 실패: ${error.message}`, 'error');
+  }
+}
+
+function personSnapshot(index) {
+  const person = people[index];
+  const error = person.validate() || (person.name() ? '' : '명단에 등록하려면 이름을 입력하세요.');
+  if (error) { setMessage(error, 'error'); return null; }
+  return person.snapshot();
+}
+
+function startEdit(profile) {
+  state.editing = { id: profile.id, name: profile.name };
+  const note = people[0].restore(profile);
+  setMessage(note || `${profile.name}을(를) A 칸에 불러왔습니다. 고친 뒤 "A 내용으로 저장"을 누르세요.`, note ? 'error' : 'info');
+  invalidate();
+  renderPresets();
+  people[0].get('name').focus();
+}
+
+async function saveEdit() {
+  const snapshot = personSnapshot(0);
+  if (!snapshot || !state.editing) return;
+  try {
+    if (!(await presetRequest('POST', `/${state.editing.id}`, snapshot))) return;
+    setMessage(`${presetLabel(snapshot)} 수정을 저장했습니다.`, 'info');
+    state.editing = null;
+    await loadPresets();
+  } catch (error) {
+    setMessage(`수정 실패: ${error.message}`, 'error');
+  }
+}
+
+async function removePreset(profile) {
+  if (!window.confirm(`${profile.name}을(를) 빠른 입력 명단에서 삭제합니다. 되돌릴 수 없습니다.`)) return;
+  try {
+    if (!(await presetRequest('DELETE', `/${profile.id}`))) return;
+    if (state.editing?.id === profile.id) state.editing = null;
+    setMessage(`${profile.name}을(를) 삭제했습니다.`, 'info');
+    await loadPresets();
+  } catch (error) {
+    setMessage(`삭제 실패: ${error.message}`, 'error');
+  }
 }
 
 for (const [index, id] of [[0, '#eng-save-a'], [1, '#eng-save-b']]) {
   document.querySelector(id).addEventListener('click', () => {
-    const person = people[index];
-    const error = person.validate();
-    if (error) { setMessage(error, 'error'); return; }
-    const saved = profiles.save(person.snapshot());
-    setMessage(saved ? `${profileLabel(saved)} 저장됨 (이 브라우저에만).` : '저장할 수 없습니다. 브라우저 저장소를 확인하세요.', saved ? 'info' : 'error');
-    renderPresets();
+    const snapshot = personSnapshot(index);
+    if (snapshot) register(snapshot);
   });
 }
+document.querySelector('#eng-edit-save').addEventListener('click', saveEdit);
+document.querySelector('#eng-edit-cancel').addEventListener('click', () => { state.editing = null; setMessage('수정을 취소했습니다.', 'info'); renderPresets(); });
+document.querySelector('#eng-import-env').addEventListener('click', async () => {
+  try {
+    const data = await presetRequest('POST', '/import');
+    if (!data) return;
+    setMessage(`환경 변수 명단에서 ${data.imported}명을 가져왔습니다.`, 'info');
+    await loadPresets();
+  } catch (error) {
+    setMessage(`가져오기 실패: ${error.message}`, 'error');
+  }
+});
 
 // ---- moment / solar return controls ------------------------------------------------
 
@@ -354,6 +481,12 @@ for (const b of document.querySelectorAll('[data-shift]')) {
     invalidate();
   });
 }
+document.querySelector('#bundle-with-b').addEventListener('change', () => { syncPersonB(); invalidate(); });
+document.querySelector('#bundle-basis').addEventListener('change', (event) => {
+  document.querySelector('#bundle-day-field').hidden = event.target.value !== 'custom';
+  invalidate();
+});
+document.querySelector('#bundle-years').value = String(new Date().getFullYear());
 document.querySelector('#return-same-place').addEventListener('change', (event) => {
   document.querySelector('#eng-return-place').hidden = event.target.checked;
   invalidate();
@@ -397,21 +530,212 @@ function validateAndBuild() {
   if (t.solar) {
     const year = Number(document.querySelector('#return-year').value);
     if (!Number.isInteger(year) || year < 1901 || year > 2100) return { error: '귀환 연도를 1901–2100 사이 정수로 입력하세요.' };
-    let location;
-    if (document.querySelector('#return-same-place').checked) {
-      const { latitude, longitude, timezone, place, location_source } = a;
-      location = { latitude, longitude, timezone, place, location_source };
-    } else {
-      const error = returnPlace.validate();
-      if (error) return { error };
-      location = returnPlace.payload();
-    }
+    const location = returnLocation(a);
+    if (location.error) return location;
     return { input: { natal: a, year, location } };
   }
+  if (t.bundle) return buildBundle(a);
   return { input: a };
 }
 
+function returnLocation(natal) {
+  if (document.querySelector('#return-same-place').checked) {
+    const { latitude, longitude, timezone, place, location_source } = natal;
+    return { latitude, longitude, timezone, place, location_source };
+  }
+  const error = returnPlace.validate();
+  return error ? { error } : returnPlace.payload();
+}
+
+function buildBundle(a) {
+  const parsed = parseYears(document.querySelector('#bundle-years').value);
+  if (parsed.error) return parsed;
+  const time = document.querySelector('#bundle-time').value;
+  if (!time) return { error: '기준 시각을 입력하세요.' };
+  let monthDay = null;
+  if (document.querySelector('#bundle-basis').value === 'custom') {
+    const text = document.querySelector('#bundle-day').value.trim();
+    const match = /^(\d{1,2})-(\d{1,2})$/.exec(text);
+    const valid = match && !Number.isNaN(new Date(Date.UTC(2000, Number(match[1]) - 1, Number(match[2]))).getTime())
+      && new Date(Date.UTC(2000, Number(match[1]) - 1, Number(match[2]))).getUTCDate() === Number(match[2]);
+    if (!valid) return { error: '기준 월·일을 MM-DD 형식으로 입력하세요. 예: 01-01' };
+    monthDay = `${pad(Number(match[1]))}-${pad(Number(match[2]))}`;
+  }
+  const location = returnLocation(a);
+  if (location.error) return location;
+  let b = null;
+  if (document.querySelector('#bundle-with-b').checked) {
+    const error = people[1].validate();
+    if (error) return { error: `사람 B: ${error}` };
+    b = personPayload(people[1]);
+  }
+  return { input: { name: people[0].name(), natal: a, person_b: b, years: parsed.years, month_day: monthDay, time, location } };
+}
+
 // ---- run ------------------------------------------------------------------------
+
+/** One calculator call; resolves to { data } or { error } and never throws for HTTP/engine errors. */
+async function callEngine(id, input) {
+  const response = await fetch(`/api/admin/engine/${id}`, {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (response.status === 401) { window.location.assign('/admin/login'); return { unauthorized: true }; }
+  const data = await response.json().catch(() => null);
+  if (response.ok && !data) return { error: `HTTP ${response.status} · 응답을 읽을 수 없습니다.` };
+  if (!response.ok) {
+    const error = data?.error || {};
+    return { error: `${error.code || `HTTP ${response.status}`} · ${error.message || '요청에 실패했습니다.'}${error.details ? ` · ${JSON.stringify(error.details)}` : ''}` };
+  }
+  return { data };
+}
+
+// ---- all-charts report ---------------------------------------------------------------
+// Natal once, synastry/composite when B is included, then solar return + progressions + transits per year.
+// A failed step stays in the report as an error section; it is never dropped or shown as a result.
+
+const toolLabel = (id) => TOOLS.find((t) => t.id === id)?.label || id;
+
+/** A tool's sections without the natal/person-A chart it echoes, which the report already has once. */
+function bundleSections(id, data) {
+  const echoed = id === 'synastry' || id === 'composite' ? 'A · ' : '네이털 · ';
+  return toolSections(id, data).filter((section) => id === 'chart' || !section.title.startsWith(echoed));
+}
+
+async function runBundle(input, serial) {
+  const { natal: a, person_b: b, years, month_day: monthDay, time, location } = input;
+  const steps = [];
+  const groups = [];
+  const progress = (text) => { if (serial === state.serial) setMessage(text); };
+  const step = async (group, id, title, payload) => {
+    if (serial !== state.serial) throw new Error('cancelled');
+    progress(`${steps.length + 1}단계 · ${title} 계산 중…`);
+    const outcome = await callEngine(id, payload);
+    if (outcome.unauthorized) throw new Error('관리자 로그인이 필요합니다.');
+    const entry = { id, title, input: payload, ...outcome };
+    steps.push(entry);
+    group.items.push(entry);
+    return entry;
+  };
+
+  const natalGroup = { title: '네이털', items: [] };
+  groups.push(natalGroup);
+  const natal = await step(natalGroup, 'chart', '네이털', a);
+  if (natal.error) return { steps, groups, skipped: [], fatal: natal.error };
+  const solarDate = natal.data.normalized.solar_date;
+  const birthYear = Number(solarDate.slice(0, 4));
+  const zone = natal.data.normalized.timezone;
+  const day = monthDay || solarDate.slice(5, 10);
+
+  if (b) {
+    const pair = { title: '두 사람 (A ↔ B)', items: [] };
+    groups.push(pair);
+    await step(pair, 'synastry', '시너스트리', { person_a: a, person_b: b });
+    await step(pair, 'composite', '컴포지트', { person_a: a, person_b: b });
+  }
+
+  const skipped = years.filter((year) => year <= birthYear);
+  for (const year of years.filter((y) => y > birthYear)) {
+    if (serial !== state.serial) break;
+    const group = { title: `${year}년`, items: [] };
+    groups.push(group);
+    const at = { date: dayInYear(year, day), time, timezone: zone };
+    await step(group, 'solar-return', `${year} 솔라 리턴`, { natal: a, year, location });
+    await step(group, 'progressions', `${year} 프로그레션 · ${at.date} ${at.time}`, { natal: a, moment: at });
+    await step(group, 'transits', `${year} 트랜짓 · ${at.date} ${at.time}`, { natal: a, moment: at });
+  }
+  return { steps, groups, skipped, birthday: solarDate.slice(5, 10), day, zone };
+}
+
+function bundleMarkdown(input, report, { raw }) {
+  const natal = report.steps[0]?.data;
+  const name = input.name || '이름 없음';
+  const failed = report.steps.filter((s) => s.error);
+  const lines = [`# 전체 리포트 · ${name}`, '',
+    `- 엔진: ${engineVersion(natal)}`,
+    `- 연도: ${input.years.join(', ')}${report.skipped.length ? ` (출생 연도 이전·같은 해라 제외: ${report.skipped.join(', ')})` : ''}`,
+    `- 트랜짓·프로그레션 기준: 매년 ${report.day}${input.month_day ? '' : ' (생일, 양력)'} ${input.time} · ${report.zone}`,
+    `- 계산 단계: ${report.steps.length}개${failed.length ? ` · **실패 ${failed.length}개** (${failed.map((s) => s.title).join(', ')})` : ' · 모두 성공'}`,
+    `- 입력 A: \`${JSON.stringify(input.natal)}\``];
+  if (input.person_b) lines.push(`- 입력 B: \`${JSON.stringify(input.person_b)}\``);
+  lines.push(`- 솔라 리턴 장소: \`${JSON.stringify(input.location)}\``, '', '## 목차', '');
+  for (const group of report.groups) lines.push(`- ${group.title}: ${group.items.map((s) => s.title).join(' · ')}`);
+  lines.push('');
+  for (const group of report.groups) {
+    lines.push(`## ${group.title}`, '');
+    for (const entry of group.items) {
+      lines.push(`### ${entry.title}`, '');
+      if (entry.error) { lines.push(`> ⚠ 계산 실패 — ${entry.error}`, ''); continue; }
+      for (const section of bundleSections(entry.id, entry.data)) lines.push(...sectionMarkdown(section, 4));
+      if (raw) lines.push('#### 원본 JSON', '', '```json', JSON.stringify(entry.data, null, 2), '```', '');
+    }
+  }
+  return lines.join('\n');
+}
+
+function renderBundle(report) {
+  const nodes = [];
+  const natal = report.steps[0]?.data;
+  if (natal?.angles?.length) {
+    const stage = make('div', 'chart-stage eng-wheel');
+    try { stage.append(createNatalWheel(natal)); nodes.push(stage); } catch { /* wheel is optional */ }
+  }
+  for (const group of report.groups) {
+    nodes.push(make('h2', 'eng-group-title', group.title));
+    for (const entry of group.items) {
+      if (entry.error) {
+        const card = make('section', 'adm-card eng-section');
+        card.append(make('h3', 'plate-number', entry.title), make('p', 'message is-error', `계산 실패 — ${entry.error}`));
+        nodes.push(card);
+        continue;
+      }
+      const details = make('details', 'adm-card eng-raw eng-step');
+      details.append(make('summary', 'plate-number', `${entry.title} · ${bundleSections(entry.id, entry.data).length}개 섹션`));
+      details.append(...bundleSections(entry.id, entry.data).map(renderSection));
+      nodes.push(details);
+    }
+  }
+  resultHost.replaceChildren(...nodes);
+  if (natal) document.querySelector('#eng-version').textContent = engineVersion(natal);
+}
+
+async function runAll(built, serial) {
+  button.disabled = true;
+  setBadge('계산 중', 'loading');
+  try {
+    const report = await runBundle(built.input, serial);
+    if (serial !== state.serial) { stopped(); return; }
+    if (report.fatal) {
+      setBadge('오류', 'error');
+      setMessage(`네이털 계산 실패: ${report.fatal}`, 'error');
+      return;
+    }
+    state.input = built.input;
+    state.name = built.input.name;
+    state.result = Object.fromEntries(report.steps.map((s) => [s.title, s.data ?? { error: s.error }]));
+    state.markdown = bundleMarkdown(built.input, report, { raw: document.querySelector('#bundle-raw').checked });
+    renderBundle(report);
+    const failed = report.steps.filter((s) => s.error).length;
+    setBadge(failed ? `실패 ${failed}개 포함` : '최신 결과', failed ? 'error' : '');
+    setMessage(`전체 리포트 완료 · ${report.steps.length}단계${failed ? ` · 실패 ${failed}개 (리포트에 표시됨)` : ''}${report.skipped.length ? ` · 출생 연도 이전이라 제외: ${report.skipped.join(', ')}` : ''}`, failed ? 'error' : 'info');
+    copyMd.disabled = false;
+    copyJson.disabled = false;
+    downloadMd.disabled = false;
+  } catch (error) {
+    if (serial !== state.serial) { stopped(); return; }
+    setBadge('오류', 'error');
+    setMessage(`요청 실패: ${error.message}`, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+/** The run was superseded by an input change; say so instead of leaving "계산 중" on screen. */
+function stopped() {
+  setBadge(state.result ? '다시 계산 필요' : '입력 대기', state.result ? 'stale' : 'waiting');
+  setMessage('입력이 바뀌어 전체 리포트 계산을 멈췄습니다. 다시 계산하세요.', 'info');
+}
 
 async function run(event) {
   event.preventDefault();
@@ -419,6 +743,8 @@ async function run(event) {
   if (built.error) { setMessage(built.error, 'error'); return; }
   const serial = ++state.serial;
   const t = tool();
+  for (const control of [copyMd, copyJson, downloadMd]) control.disabled = true;
+  if (t.bundle) { await runAll(built, serial); return; }
   button.disabled = true;
   setBadge('계산 중', 'loading');
   setMessage(`${t.label} 계산 중…`);
@@ -439,12 +765,15 @@ async function run(event) {
     }
     state.result = data;
     state.input = built.input;
+    state.name = people[0].name();
     state.sections = toolSections(t.id, data);
+    state.markdown = markdown(t.id, built.input, data, state.sections);
     renderResult(t, data, built.input);
     setBadge('최신 결과');
     setMessage(`${t.label} 계산 완료 · ${state.sections.length}개 섹션 · ${engineVersion(data)}`, 'info');
     copyMd.disabled = false;
     copyJson.disabled = false;
+    downloadMd.disabled = false;
   } catch (error) {
     if (serial !== state.serial) return;
     setBadge('오류', 'error');
@@ -474,21 +803,19 @@ function renderResult(t, data, input) {
 async function copy(text, done) {
   try { await navigator.clipboard.writeText(text); setMessage(done, 'info'); } catch { setMessage('클립보드에 복사할 수 없습니다. 브라우저 권한을 확인하세요.', 'error'); }
 }
-copyMd.addEventListener('click', () => copy(markdown(state.tool, state.input, state.result, state.sections), '결과를 Markdown으로 복사했습니다.'));
+copyMd.addEventListener('click', () => copy(state.markdown, '결과를 Markdown으로 복사했습니다.'));
+downloadMd.addEventListener('click', () => {
+  const name = state.name || 'chart';
+  const suffix = state.tool === 'bundle' ? `전체-${state.input.years[0]}${state.input.years.length > 1 ? `-${state.input.years.at(-1)}` : ''}` : state.tool;
+  const link = make('a');
+  link.href = URL.createObjectURL(new Blob([state.markdown], { type: 'text/markdown;charset=utf-8' }));
+  link.download = `${name.replace(/[\\/:*?"<>|\s]+/g, '_')}-${suffix}.md`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  setMessage(`${link.download} 파일을 내려받았습니다.`, 'info');
+});
 copyJson.addEventListener('click', () => copy(JSON.stringify(state.result, null, 2), '원본 JSON을 복사했습니다.'));
 form.addEventListener('submit', run);
-
-async function loadPresets() {
-  try {
-    const response = await fetch('/api/admin/engine/presets', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-    if (response.status === 401) { window.location.assign('/admin/login'); return; }
-    const data = await response.json().catch(() => null);
-    state.presets = Array.isArray(data?.presets) ? data.presets : [];
-  } catch {
-    state.presets = [];
-  }
-  renderPresets();
-}
 
 renderTools();
 renderPresets();

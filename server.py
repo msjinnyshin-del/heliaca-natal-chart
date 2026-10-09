@@ -8,6 +8,7 @@ import argparse
 import json
 import mimetypes
 import os
+import re
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,7 +20,7 @@ ADMIN_ROOT = WEB_ROOT / "admin"
 MAX_REQUEST_BYTES = 16_384
 # Admin static files reachable before login; everything else under /admin needs a session.
 ADMIN_PUBLIC_FILES = {"login.html", "login.js", "admin.css"}
-ADMIN_PRIVATE_FILES = {"index.html", "admin.js", "engine-check.html", "engine-check.js"}
+ADMIN_PRIVATE_FILES = {"index.html", "admin.js", "engine-check.html", "engine-check.js", "engine-bundle.js"}
 # Hostnames Vercel assigns to a deployment; readable at runtime as system environment variables.
 VERCEL_HOST_VARS = ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL")
 
@@ -32,25 +33,27 @@ CALCULATORS = {"/api/synastry": ("natal.synastry", "calculate_synastry"),
 SHARE_KINDS = {"synastry": CALCULATORS["/api/synastry"], "composite": CALCULATORS["/api/composite"]}
 # Admin engine inspector: every calculator by name, run without recording a submission.
 ENGINE_TOOLS = {"chart": ("natal.engine", "calculate_chart"), **{route[len("/api/"):]: spec for route, spec in CALCULATORS.items()}}
-# Admin engine inspector quick-input people live in an environment variable (JSON array of browser
-# profile objects), never in the repository: the repository is public and these are real birth data.
+# Admin engine inspector quick-input people: registered in the admin database (natal/presets.py). The older
+# NATAL_ADMIN_PRESETS environment variable (JSON array of browser profile objects) stays readable so its people
+# can be imported once; neither ever goes in the repository (it is public and these are real birth data).
 PRESETS_VAR = "NATAL_ADMIN_PRESETS"
+PRESET_ID_RE = re.compile(r"[0-9]{1,15}")
 
 
-def admin_presets():
-    """Preset people for the engine inspector from NATAL_ADMIN_PRESETS; malformed entries are dropped."""
+def env_presets():
+    """People from NATAL_ADMIN_PRESETS, normalized; malformed entries are dropped."""
+    from natal import presets
+    from natal.store import StoreError
     try:
         items = json.loads(os.environ.get(PRESETS_VAR) or "[]")
     except ValueError:
         return []
-    if not isinstance(items, list):
-        return []
     valid = []
-    for item in items:
-        place = item.get("place") if isinstance(item, dict) else None
-        if (isinstance(place, dict) and isinstance(item.get("date"), str) and isinstance(item.get("name"), str)
-                and isinstance(place.get("timezone"), str) and all(isinstance(place.get(k), (int, float)) for k in ("latitude", "longitude"))):
-            valid.append(item)
+    for item in items if isinstance(items, list) else []:
+        try:
+            valid.append(presets.clean_profile(item))
+        except StoreError:
+            continue
     return valid
 
 
@@ -521,7 +524,11 @@ class ChartHandler(BaseHTTPRequestHandler):
         try:
             if parts[2:] == ["engine", "presets"]:
                 self.query_params(set())
-                self.send_json(200, {"presets": admin_presets()})
+                from natal import presets
+                registered = presets.list_presets()
+                names = {item["name"] for item in registered}
+                # Environment people not imported yet are listed separately, read-only.
+                self.send_json(200, {"presets": registered, "env_presets": [p for p in env_presets() if p["name"] not in names]})
             elif parts[2:] == ["utm-stats"]:
                 params = self.query_params({"from", "to"})
                 from natal import utm
@@ -588,12 +595,14 @@ class ChartHandler(BaseHTTPRequestHandler):
             self.error_json(404, "NOT_FOUND", "요청 경로를 찾을 수 없습니다.")
 
     def admin_api_post(self, route):
-        from natal import store, utm
+        from natal import presets, store, utm
         parts = route.strip("/").split("/")[2:]  # after api/admin
-        if len(parts) == 2 and parts[0] == "engine":
+        if len(parts) == 2 and parts[0] == "engine" and parts[1] != "presets":
             self.admin_engine(parts[1])
             return
         handlers = {
+            ("engine", "presets"): lambda body: (201, presets.create_preset(body)),
+            ("engine", "presets", "import"): lambda body: (200, presets.import_presets(env_presets())),
             ("utm", "channels"): lambda body: (201, utm.create_channel(body)),
             ("utm", "campaigns"): lambda body: (201, utm.create_campaign(body)),
             ("utm", "links"): lambda body: (200, utm.create_links(body)),
@@ -604,11 +613,13 @@ class ChartHandler(BaseHTTPRequestHandler):
             handler = lambda body: (200, {"updated": update(parts[2], body)})
         if handler is None and len(parts) == 4 and parts[:2] == ["utm", "links"] and parts[3] in ("archive", "unarchive"):
             handler = lambda body: (200, {"updated": utm.set_archived(parts[2], parts[3] == "archive")})
+        if handler is None and len(parts) == 3 and parts[:2] == ["engine", "presets"] and PRESET_ID_RE.fullmatch(parts[2]):
+            handler = lambda body: (200, {"updated": presets.update_preset(int(parts[2]), body)})
         if handler is None:
             self.error_json(404, "NOT_FOUND", "요청 경로를 찾을 수 없습니다.")
             return
         body = {}
-        if parts[-1] not in ("archive", "unarchive"):
+        if parts[-1] not in ("archive", "unarchive") and tuple(parts) != ("engine", "presets", "import"):
             raw = self.read_body()
             if raw is None:
                 return
@@ -702,6 +713,9 @@ class ChartHandler(BaseHTTPRequestHandler):
                 deleted = store.delete_submission(int(parts[3]))
             elif len(parts) == 4 and parts[2] == "users":
                 deleted = store.delete_visitor(parts[3])
+            elif len(parts) == 5 and parts[2:4] == ["engine", "presets"] and PRESET_ID_RE.fullmatch(parts[4]):
+                from natal import presets
+                deleted = presets.delete_preset(int(parts[4]))
             else:
                 self.error_json(404, "NOT_FOUND", "요청 경로를 찾을 수 없습니다.")
                 return

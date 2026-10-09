@@ -174,7 +174,7 @@ class VercelEntrypointTests(ServerHarness):
 class PostgresBackendTests(unittest.TestCase):
     """Runs the real store/utm/login code against Postgres. Use a throwaway database: tables are truncated."""
 
-    TABLES = ("utm_clicks", "utm_links", "utm_campaigns", "submissions", "login_attempts")
+    TABLES = ("utm_clicks", "utm_links", "utm_campaigns", "submissions", "login_attempts", "admin_presets")
 
     @classmethod
     def setUpClass(cls):
@@ -244,6 +244,19 @@ class PostgresBackendTests(unittest.TestCase):
         self.assertIsNone(utm.resolve_link(code))
         self.assertEqual(utm.update_channel("instagram", {"is_active": False}), 1)
         self.assertEqual(utm.list_channels()["channels"][-1]["key"], "instagram")
+
+    def test_engine_inspector_presets(self):
+        from natal import presets
+        person = {"name": "가상", "calendar": "gregorian", "date": "1990-05-15", "time": "08:30",
+                  "place": {"label": "Seoul", "latitude": 37.5665, "longitude": 126.978, "timezone": "Asia/Seoul"}}
+        created = presets.create_preset(person)
+        self.assertIsInstance(created["id"], int)
+        with self.assertRaises(store.StoreError):
+            presets.create_preset(person)
+        self.assertEqual(presets.update_preset(created["id"], {**person, "date": "1991-01-02"}), 1)
+        self.assertEqual([(p["name"], p["date"]) for p in presets.list_presets()], [("가상", "1991-01-02")])
+        self.assertEqual(presets.delete_preset(created["id"]), 1)
+        self.assertEqual(presets.list_presets(), [])
 
     def test_login_rate_limit_is_shared_in_database(self):
         for _ in range(admin_auth.RATE_MAX_FAILURES):

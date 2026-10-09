@@ -33,12 +33,20 @@
         <div class="eng-presets-head">
           <span class="plate-number">빠른 입력</span>
           <div class="adm-actions">
-            <button id="eng-save-a" class="text-button" type="button">A 저장</button>
-            <button id="eng-save-b" class="text-button" type="button" hidden>B 저장</button>
+            <button id="eng-import-env" class="text-button" type="button" hidden>환경 변수 가져오기</button>
+            <button id="eng-save-a" class="text-button" type="button" title="사람 A 칸의 입력을 명단에 새로 등록">A 등록</button>
+            <button id="eng-save-b" class="text-button" type="button" title="사람 B 칸의 입력을 명단에 새로 등록" hidden>B 등록</button>
           </div>
         </div>
+        <div id="eng-edit-bar" class="eng-edit-bar" role="status" hidden>
+          <span>✎ <strong id="eng-edit-name"></strong> 수정 중 — A 칸을 고친 뒤 저장하세요.</span>
+          <span class="adm-actions">
+            <button id="eng-edit-save" class="text-button" type="button">A 내용으로 저장</button>
+            <button id="eng-edit-cancel" class="text-button" type="button">취소</button>
+          </span>
+        </div>
         <div id="eng-preset-list" class="eng-preset-list"></div>
-        <p class="adm-note">내장 명단은 서버 환경 변수 NATAL_ADMIN_PRESETS에서 옵니다. "A 저장"으로 추가한 사람은 이 브라우저(localStorage)에만 남습니다. 칩의 A·B를 눌러 각 사람 칸에 채웁니다.</p>
+        <p class="adm-note">명단은 관리자 DB에 저장되어 어느 브라우저에서나 같습니다. 사람 칸을 채우고 "A 등록"으로 추가 · 칩의 A·B로 채우기 · ✎ 수정 · ✕ 삭제. <span class="eng-legend">env</span>는 환경 변수 NATAL_ADMIN_PRESETS의 읽기 전용 사람, ⇪는 이 브라우저에만 남은 사람을 명단에 옮깁니다.</p>
       </section>
 
       <div class="eng-people">
@@ -60,10 +68,27 @@
         </div>
       </section>
 
+      <section id="eng-bundle" class="adm-card eng-extra" hidden>
+        <h3 class="plate-number">전체 리포트 · 연도</h3>
+        <div class="adm-form-grid">
+          <label class="field"><span>볼 연도 (예: 2026-2028 또는 2026, 2030)</span><input id="bundle-years" spellcheck="false" required></label>
+          <label class="field"><span>트랜짓·프로그레션 기준일</span>
+            <select id="bundle-basis"><option value="birthday" selected>매년 생일</option><option value="custom">매년 같은 월·일 (직접)</option></select>
+          </label>
+          <label class="field" id="bundle-day-field" hidden><span>월·일 (MM-DD)</span><input id="bundle-day" placeholder="01-01" spellcheck="false"></label>
+          <label class="field"><span>기준 시각 (출생지 현지)</span><input id="bundle-time" type="time" step="60" value="12:00" required></label>
+        </div>
+        <div class="eng-bundle-options">
+          <label><input id="bundle-with-b" type="checkbox"> 사람 B도 포함 (시너스트리 · 컴포지트)</label>
+          <label><input id="bundle-raw" type="checkbox"> 원본 JSON도 MD에 포함 (파일이 매우 커짐)</label>
+        </div>
+        <p class="adm-note">네이털 1회 + 연도마다 솔라 리턴 · 세컨더리 프로그레션 · 트랜짓을 계산해 MD 하나로 묶습니다. 솔라 리턴 장소는 아래 "솔라 리턴" 설정을 따릅니다. 최대 20개 연도.</p>
+      </section>
+
       <section id="eng-return" class="adm-card eng-extra" hidden>
         <h3 class="plate-number">솔라 리턴</h3>
         <div class="adm-form-grid">
-          <label class="field"><span>귀환 연도</span><input id="return-year" type="number" min="1901" max="2100" step="1" required></label>
+          <label class="field" id="return-year-field"><span>귀환 연도</span><input id="return-year" type="number" min="1901" max="2100" step="1" required></label>
           <label class="field eng-check"><span>장소</span><label class="manual-location-control"><input id="return-same-place" type="checkbox" checked> <span>출생지와 같음</span></label></label>
         </div>
         <div id="eng-return-place" hidden><div data-place-prefix="r-" data-label="귀환 장소" data-place-label="장소"></div></div>
@@ -112,6 +137,7 @@
         <button id="calculate-button" class="copy-button" type="submit">계산</button>
         <button id="copy-markdown" class="text-button" type="button" disabled>📋 결과 MD로 복사</button>
         <button id="copy-json" class="text-button" type="button" disabled>원본 JSON 복사</button>
+        <button id="download-markdown" class="text-button" type="button" disabled>⬇ MD 파일 받기</button>
         <span id="freshness-badge" class="status-badge is-waiting">입력 대기</span>
       </div>
       <p id="message" class="message" role="status" aria-live="polite"></p>
