@@ -20,7 +20,7 @@ ADMIN_ROOT = WEB_ROOT / "admin"
 MAX_REQUEST_BYTES = 16_384
 # Admin static files reachable before login; everything else under /admin needs a session.
 ADMIN_PUBLIC_FILES = {"login.html", "login.js", "admin.css"}
-ADMIN_PRIVATE_FILES = {"index.html", "admin.js", "engine-check.html", "engine-check.js"}
+ADMIN_PRIVATE_FILES = {"index.html", "admin.js", "engine-check.html", "engine-check.js", "engine-bundle.js"}
 # Hostnames Vercel assigns to a deployment; readable at runtime as system environment variables.
 VERCEL_HOST_VARS = ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL")
 

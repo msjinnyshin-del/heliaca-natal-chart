@@ -291,7 +291,7 @@ class AdminTests(unittest.TestCase):
     # ---- engine inspector -------------------------------------------------------
 
     def test_engine_inspector_files_require_login(self):
-        for path in ("/admin/engine-check.html", "/admin/engine-check.js"):
+        for path in ("/admin/engine-check.html", "/admin/engine-check.js", "/admin/engine-bundle.js"):
             with self.subTest(path=path):
                 status, headers, _ = self.request("GET", path)
                 self.assertEqual(status, 303)
