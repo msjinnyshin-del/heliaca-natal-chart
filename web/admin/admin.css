@@ -131,3 +131,9 @@
 .eng-raw[open] summary { margin-bottom: .6rem; }
 .eng-raw .adm-raw { max-height: 32rem; }
 .eng-chip.is-builtin { border-color: rgba(84, 196, 178, .35); }
+.eng-chip.is-env, .eng-chip.is-local { border-style: dashed; }
+.eng-chip.is-editing { border-color: var(--gold); }
+.eng-edit-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .6rem; padding: .4rem .7rem; border: 1px solid var(--gold); font-size: .8rem; }
+.eng-edit-bar[hidden] { display: none; }
+.eng-edit-bar .text-button { margin-top: 0; }
+.eng-legend { font-family: inherit; opacity: .8; }

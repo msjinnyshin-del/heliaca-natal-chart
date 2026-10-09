@@ -26,7 +26,7 @@ const KEY_LABELS = {
   stability: '안정성', in_orb_at_representative: '대표 시각 orb 내', windows: '성립 구간', strength: 'strength', strong: 'strong', body: '천체',
   slow: '느린 천체', natal: '네이털', transit: '트랜짓', progressed: '진행', time_sensitivity: '시간 민감도', time_range: '하루 범위',
 };
-const state = { tool: 'chart', result: null, sections: [], serial: 0, presets: [] };
+const state = { tool: 'chart', result: null, sections: [], serial: 0, presets: [], envPresets: [], editing: null };
 
 // ---- formatting ---------------------------------------------------------------
 
@@ -287,47 +287,164 @@ function selectTool(id) {
 }
 
 // ---- presets ----------------------------------------------------------------------
+// Registered people live in the admin database (/api/admin/engine/presets). People still only in the
+// NATAL_ADMIN_PRESETS environment variable and old browser-saved profiles are shown so they can be moved in.
+
+const PRESETS_API = '/api/admin/engine/presets';
+const presetLabel = (profile) => `${profile.name}${profile.time_unknown ? ' · 생시 모름' : ''}`;
+
+async function presetRequest(method, path = '', body) {
+  const response = await fetch(`${PRESETS_API}${path}`, {
+    method, credentials: 'same-origin',
+    headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (response.status === 401) { window.location.assign('/admin/login'); return null; }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error?.message || `HTTP ${response.status}`);
+  return data;
+}
+
+function chipButton(text, title, onClick, extra = '') {
+  const b = make('button', `text-button${extra ? ` ${extra}` : ''}`, text);
+  b.type = 'button';
+  b.title = title;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function fillButtons(profile) {
+  return [[0, 'A'], [1, 'B']].map(([index, short]) => chipButton(short, `${short}에 채우기`, () => {
+    const note = people[index].restore(profile);
+    // Refilling A from another chip ends an edit, so "A 내용으로 저장" can never overwrite the wrong person.
+    if (index === 0 && state.editing) { state.editing = null; renderPresets(); }
+    if (index === 1 && tool().people < 2) setMessage('B는 시너스트리·컴포지트에서만 씁니다.', 'info');
+    else setMessage(note || `${short}에 ${profile.name || profileLabel(profile)}을(를) 채웠습니다.`, note ? 'error' : 'info');
+    invalidate();
+  }));
+}
 
 function renderPresets() {
   const host = document.querySelector('#eng-preset-list');
-  const builtIn = [SAMPLE, ...state.presets.map((p, i) => ({ ...p, id: `preset-${i}` }))];
-  const items = [...builtIn, ...profiles.list()];
-  host.replaceChildren(...items.map((profile) => {
-    const chip = make('span', `eng-chip${profile.id.startsWith('preset-') || profile.id === 'sample' ? ' is-builtin' : ''}`);
-    chip.append(make('span', 'eng-chip-label', profile.id === 'sample' || profile.id.startsWith('preset-') ? `${profile.name}${profile.time_unknown ? ' · 생시 모름' : ''}` : profileLabel(profile)));
-    for (const [index, short] of [[0, 'A'], [1, 'B']]) {
-      const b = make('button', 'text-button', short);
-      b.type = 'button';
-      b.title = `${short}에 채우기`;
-      b.addEventListener('click', () => {
-        const note = people[index].restore(profile);
-        if (index === 1 && tool().people < 2) setMessage('B는 시너스트리·컴포지트에서만 씁니다.', 'info');
-        else setMessage(note || `${short}에 ${profile.name || profileLabel(profile)}을(를) 채웠습니다.`, note ? 'error' : 'info');
-        invalidate();
-      });
-      chip.append(b);
-    }
-    if (profile.id !== 'sample' && !profile.id.startsWith('preset-')) {
-      const del = make('button', 'text-button adm-danger', '✕');
-      del.type = 'button';
-      del.title = '이 브라우저에서 삭제';
-      del.addEventListener('click', () => { profiles.remove(profile.id); renderPresets(); });
-      chip.append(del);
-    }
-    return chip;
-  }));
+  const chips = [];
+  const sample = make('span', 'eng-chip is-builtin');
+  sample.append(make('span', 'eng-chip-label', SAMPLE.name), ...fillButtons(SAMPLE));
+  chips.push(sample);
+  for (const profile of state.presets) {
+    const chip = make('span', `eng-chip${state.editing?.id === profile.id ? ' is-editing' : ''}`);
+    chip.append(make('span', 'eng-chip-label', presetLabel(profile)), ...fillButtons(profile),
+      chipButton('✎', '수정: A 칸에 불러와 고친 뒤 저장', () => startEdit(profile)),
+      chipButton('✕', '명단에서 삭제', () => removePreset(profile), 'adm-danger'));
+    chips.push(chip);
+  }
+  for (const profile of state.envPresets) {
+    const chip = make('span', 'eng-chip is-builtin is-env');
+    chip.title = '환경 변수 NATAL_ADMIN_PRESETS의 사람 (읽기 전용). "가져오기"로 명단에 옮기면 수정·삭제할 수 있습니다.';
+    chip.append(make('span', 'eng-chip-label', `${presetLabel(profile)} · env`), ...fillButtons(profile));
+    chips.push(chip);
+  }
+  for (const profile of profiles.list()) {
+    const chip = make('span', 'eng-chip is-local');
+    chip.title = '이 브라우저(localStorage)에만 저장된 사람';
+    chip.append(make('span', 'eng-chip-label', profileLabel(profile)), ...fillButtons(profile),
+      chipButton('⇪', '서버 명단에 등록', () => register(profile, () => profiles.remove(profile.id))),
+      chipButton('✕', '이 브라우저에서 삭제', () => { profiles.remove(profile.id); renderPresets(); }, 'adm-danger'));
+    chips.push(chip);
+  }
+  host.replaceChildren(...chips);
+  const importButton = document.querySelector('#eng-import-env');
+  importButton.hidden = !state.envPresets.length;
+  importButton.textContent = `환경 변수 ${state.envPresets.length}명 가져오기`;
+  const bar = document.querySelector('#eng-edit-bar');
+  bar.hidden = !state.editing;
+  if (state.editing) document.querySelector('#eng-edit-name').textContent = state.editing.name;
+}
+
+async function loadPresets() {
+  try {
+    const data = await presetRequest('GET');
+    if (!data) return;
+    state.presets = Array.isArray(data.presets) ? data.presets : [];
+    state.envPresets = Array.isArray(data.env_presets) ? data.env_presets : [];
+    if (state.editing && !state.presets.some((p) => p.id === state.editing.id)) state.editing = null;
+  } catch (error) {
+    setMessage(`빠른 입력 명단을 불러오지 못했습니다: ${error.message}`, 'error');
+  }
+  renderPresets();
+}
+
+/** Registers a snapshot of a person; `after` runs only when the server accepted it. */
+async function register(profile, after) {
+  try {
+    const saved = await presetRequest('POST', '', profile);
+    if (!saved) return;
+    after?.();
+    setMessage(`${presetLabel(saved)}을(를) 명단에 등록했습니다.`, 'info');
+    await loadPresets();
+  } catch (error) {
+    setMessage(`등록 실패: ${error.message}`, 'error');
+  }
+}
+
+function personSnapshot(index) {
+  const person = people[index];
+  const error = person.validate() || (person.name() ? '' : '명단에 등록하려면 이름을 입력하세요.');
+  if (error) { setMessage(error, 'error'); return null; }
+  return person.snapshot();
+}
+
+function startEdit(profile) {
+  state.editing = { id: profile.id, name: profile.name };
+  const note = people[0].restore(profile);
+  setMessage(note || `${profile.name}을(를) A 칸에 불러왔습니다. 고친 뒤 "A 내용으로 저장"을 누르세요.`, note ? 'error' : 'info');
+  invalidate();
+  renderPresets();
+  people[0].get('name').focus();
+}
+
+async function saveEdit() {
+  const snapshot = personSnapshot(0);
+  if (!snapshot || !state.editing) return;
+  try {
+    if (!(await presetRequest('POST', `/${state.editing.id}`, snapshot))) return;
+    setMessage(`${presetLabel(snapshot)} 수정을 저장했습니다.`, 'info');
+    state.editing = null;
+    await loadPresets();
+  } catch (error) {
+    setMessage(`수정 실패: ${error.message}`, 'error');
+  }
+}
+
+async function removePreset(profile) {
+  if (!window.confirm(`${profile.name}을(를) 빠른 입력 명단에서 삭제합니다. 되돌릴 수 없습니다.`)) return;
+  try {
+    if (!(await presetRequest('DELETE', `/${profile.id}`))) return;
+    if (state.editing?.id === profile.id) state.editing = null;
+    setMessage(`${profile.name}을(를) 삭제했습니다.`, 'info');
+    await loadPresets();
+  } catch (error) {
+    setMessage(`삭제 실패: ${error.message}`, 'error');
+  }
 }
 
 for (const [index, id] of [[0, '#eng-save-a'], [1, '#eng-save-b']]) {
   document.querySelector(id).addEventListener('click', () => {
-    const person = people[index];
-    const error = person.validate();
-    if (error) { setMessage(error, 'error'); return; }
-    const saved = profiles.save(person.snapshot());
-    setMessage(saved ? `${profileLabel(saved)} 저장됨 (이 브라우저에만).` : '저장할 수 없습니다. 브라우저 저장소를 확인하세요.', saved ? 'info' : 'error');
-    renderPresets();
+    const snapshot = personSnapshot(index);
+    if (snapshot) register(snapshot);
   });
 }
+document.querySelector('#eng-edit-save').addEventListener('click', saveEdit);
+document.querySelector('#eng-edit-cancel').addEventListener('click', () => { state.editing = null; setMessage('수정을 취소했습니다.', 'info'); renderPresets(); });
+document.querySelector('#eng-import-env').addEventListener('click', async () => {
+  try {
+    const data = await presetRequest('POST', '/import');
+    if (!data) return;
+    setMessage(`환경 변수 명단에서 ${data.imported}명을 가져왔습니다.`, 'info');
+    await loadPresets();
+  } catch (error) {
+    setMessage(`가져오기 실패: ${error.message}`, 'error');
+  }
+});
 
 // ---- moment / solar return controls ------------------------------------------------
 
@@ -477,18 +594,6 @@ async function copy(text, done) {
 copyMd.addEventListener('click', () => copy(markdown(state.tool, state.input, state.result, state.sections), '결과를 Markdown으로 복사했습니다.'));
 copyJson.addEventListener('click', () => copy(JSON.stringify(state.result, null, 2), '원본 JSON을 복사했습니다.'));
 form.addEventListener('submit', run);
-
-async function loadPresets() {
-  try {
-    const response = await fetch('/api/admin/engine/presets', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-    if (response.status === 401) { window.location.assign('/admin/login'); return; }
-    const data = await response.json().catch(() => null);
-    state.presets = Array.isArray(data?.presets) ? data.presets : [];
-  } catch {
-    state.presets = [];
-  }
-  renderPresets();
-}
 
 renderTools();
 renderPresets();

@@ -6,7 +6,7 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import server
 from natal import admin_auth, store
@@ -327,20 +327,74 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["total"], 0)
 
-    def test_engine_inspector_presets_come_from_environment(self):
+    def test_engine_inspector_presets_crud(self):
+        person = {"name": "가상A", "calendar": "gregorian", "date": "1990-05-15", "time": "08:30", "time_unknown": False,
+                  "place": {"label": "Seoul", "latitude": 37.5665, "longitude": 126.978, "timezone": "Asia/Seoul",
+                            "source": {"mode": "manual", "provider": "user", "place_id": None, "label": "Seoul", "extra": "x"}}}
+        path = "/api/admin/engine/presets"
+        self.assertEqual(self.request("GET", path)[0], 401)
+        self.assertEqual(self.request("POST", path, person, {"Origin": self.origin})[0], 401)
+        cookie = self.login()
+        self.assertEqual(self.admin("POST", path, cookie, person, origin=False)[0], 403)
+        self.assertEqual(self.admin("GET", path, cookie)[2], {"presets": [], "env_presets": []})
+
+        status, _, created = self.admin("POST", path, cookie, person)
+        self.assertEqual(status, 201)
+        self.assertNotIn("extra", created["place"]["source"])
+        self.assertEqual(self.admin("POST", path, cookie, person)[0], 422)  # same name twice
+        unknown = {**person, "name": "가상B", "time_unknown": True, "time": "99:99"}
+        status, _, other = self.admin("POST", path, cookie, unknown)
+        self.assertEqual((status, other["time"]), (201, None))
+        listed = self.admin("GET", path, cookie)[2]["presets"]
+        self.assertEqual([(p["id"], p["name"]) for p in listed], [(created["id"], "가상A"), (other["id"], "가상B")])
+
+        edited = {**person, "date": "1991-01-02", "time": "23:59"}
+        self.assertEqual(self.admin("POST", f"{path}/{created['id']}", cookie, edited), (200, ANY, {"updated": 1}))
+        self.assertEqual(self.admin("POST", f"{path}/{created['id']}", cookie, {**edited, "name": "가상B"})[0], 422)
+        self.assertEqual(self.admin("POST", f"{path}/9999", cookie, edited)[0], 404)
+        self.assertEqual(self.admin("POST", f"{path}/%C2%B2", cookie, edited)[0], 404)
+        self.assertEqual(self.admin("DELETE", f"{path}/{'9' * 30}", cookie)[0], 404)
+        self.assertEqual(self.admin("GET", path, cookie)[2]["presets"][0]["date"], "1991-01-02")
+
+        self.assertEqual(self.admin("DELETE", f"{path}/{created['id']}", cookie, origin=False)[0], 403)
+        self.assertEqual(self.admin("DELETE", f"{path}/{created['id']}", cookie)[2], {"deleted": 1})
+        self.assertEqual(self.admin("DELETE", f"{path}/{created['id']}", cookie)[0], 404)
+        self.assertEqual([p["name"] for p in self.admin("GET", path, cookie)[2]["presets"]], ["가상B"])
+
+    def test_engine_inspector_preset_validation(self):
+        cookie = self.login()
+        base = {"name": "가상", "calendar": "gregorian", "date": "1990-05-15", "time": "08:30",
+                "place": {"label": "Seoul", "latitude": 37.5665, "longitude": 126.978, "timezone": "Asia/Seoul"}}
+        bad = [{**base, "name": "  "}, {**base, "calendar": "julian"}, {**base, "date": "1990/05/15"}, {**base, "time": "24:00"},
+               {**base, "time": None}, {**base, "place": None}, {**base, "place": {**base["place"], "latitude": 91}},
+               {**base, "place": {**base["place"], "longitude": True}}, {**base, "place": {**base["place"], "timezone": "Mars/Base"}},
+               {**base, "place": {**base["place"], "label": ""}}, {**base, "date": "1990-02-31"}, ["not", "an", "object"]]
+        for body in bad:
+            with self.subTest(body=body):
+                status, _, data = self.admin("POST", "/api/admin/engine/presets", cookie, body)
+                self.assertIn(status, (400, 422))
+                self.assertIsNotNone(data["error"]["message"])
+        self.assertEqual(self.admin("GET", "/api/admin/engine/presets", cookie)[2]["presets"], [])
+
+    def test_engine_inspector_imports_environment_presets_once(self):
         people = [{"name": "A", "calendar": "gregorian", "date": "1990-05-15", "time": "08:30", "time_unknown": False,
                    "place": {"label": "Seoul", "latitude": 37.5665, "longitude": 126.978, "timezone": "Asia/Seoul"}},
                   {"name": "broken"}, "junk"]
-        self.assertEqual(self.request("GET", "/api/admin/engine/presets")[0], 401)
+        path = "/api/admin/engine/presets"
         cookie = self.login()
         with patch.dict(os.environ, {server.PRESETS_VAR: json.dumps(people)}):
-            status, _, data = self.admin("GET", "/api/admin/engine/presets", cookie)
-        self.assertEqual(status, 200)
-        self.assertEqual([p["name"] for p in data["presets"]], ["A"])
+            data = self.admin("GET", path, cookie)[2]
+            self.assertEqual(([p["name"] for p in data["env_presets"]], data["presets"]), (["A"], []))
+            self.assertEqual(self.admin("POST", f"{path}/import", cookie)[2], {"imported": 1})
+            self.assertEqual(self.admin("POST", f"{path}/import", cookie)[2], {"imported": 0})
+            data = self.admin("GET", path, cookie)[2]
+            self.assertEqual(([p["name"] for p in data["presets"]], data["env_presets"]), (["A"], []))
         with patch.dict(os.environ, {server.PRESETS_VAR: "not json"}):
-            self.assertEqual(self.admin("GET", "/api/admin/engine/presets", cookie)[2], {"presets": []})
-        with patch.dict(os.environ, {server.PRESETS_VAR: ""}):
-            self.assertEqual(self.admin("GET", "/api/admin/engine/presets", cookie)[2], {"presets": []})
+            self.assertEqual(self.admin("GET", path, cookie)[2]["env_presets"], [])
+        # Only the presets route skips the body: a UTM channel keyed "import" still updates normally.
+        self.assertEqual(self.admin("POST", "/api/admin/utm/channels", cookie,
+                                    {"key": "import", "label_ko": "가져옴", "utm_source": "imp", "utm_medium": "social"})[0], 201)
+        self.assertEqual(self.admin("POST", "/api/admin/utm/channels/import", cookie, {"label_ko": "수정"}), (200, ANY, {"updated": 1}))
 
     def test_engine_inspector_errors(self):
         cookie = self.login()
